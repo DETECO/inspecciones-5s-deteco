@@ -233,7 +233,7 @@ function header() {
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand">DETECO</div><span class="mode-pill">5S semanal</span></div>
+        <div class="brand-row"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M4 4h10v10H4zM18 4h10v10H18zM4 18h10v10H4zM18 18h10v10H18z" stroke="currentColor" stroke-width="3"/><path d="M14 4v10M18 18v10M4 14h10M18 14h10" stroke="white" stroke-width="2"/></svg></span><span>DETECO 5S</span></div><span class="mode-pill">5S semanal</span></div>
         <div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div>${state.route ? `<span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span>` : ''}</div>
         <div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
