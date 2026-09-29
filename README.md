@@ -1,0 +1,1 @@
+# inspecciones-5s-deteco
