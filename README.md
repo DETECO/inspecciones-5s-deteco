@@ -2,33 +2,28 @@
 
 Aplicación web móvil para inspecciones semanales 5S por estación, registro fotográfico de hallazgos y seguimiento de kaizen.
 
-> **Demo no productiva.** No usar para registrar inspecciones reales todavía.
+> **Estado: conectada a Apps Script, Google Sheets y Drive reales; en etapa de pruebas funcionales.** Las reservas, respuestas y fotos guardadas desde un QR válido se registran en los recursos reales. Coordina una prueba antes de usar una estación que esté en operación.
 
-## Estado de conexión
+## Aplicación
 
-La aplicación aún no está conectada a Google Sheets ni Google Drive. En `app/config.js`, `bridgeEndpoint` permanece vacío; por eso la interfaz conserva borradores localmente y no sincroniza inspecciones.
+[ Abrir Inspección 5S DETECO ](https://deteco.github.io/inspecciones-5s-deteco/)
 
-## Contenido
+El acceso operativo se realiza escaneando el QR físico de la estación. La página general no permite elegir una estación manualmente.
 
-- `app/`: interfaz, lógica de inspección, pruebas y backend de Apps Script.
-- `docs/`: estado, requisitos y guía de despliegue.
-- `PAUTA_APP_5S_DETECO.md`: pauta funcional aprobada.
+## Datos y seguridad
 
-## Pruebas locales
+- La interfaz se publica en GitHub Pages y se comunica con un puente de Google Apps Script.
+- El acceso a cada estación se valida con el token incluido en su QR. Los tokens no se publican en este repositorio.
+- Las inspecciones y evidencias se guardan en el Google Sheet y Drive configurados por DETECO. Sus identificadores y credenciales no están en el código público.
+- El panel de administración exige una cuenta Workspace autorizada.
 
-Con Node.js, desde la raíz:
+## Código
 
-```powershell
-node --test app/tests/*.test.mjs app/backend/tests/*.test.cjs
-node app/backend/build-deploy.cjs
-```
+- `index.html`, `styles.css`, `client/`, `domain/`, `transport/` y `assets/`: aplicación web.
+- `config.js`: URL pública del puente; no contiene tokens QR.
+- `backend/`: código fuente y paquete desplegable de Apps Script.
+- `tests/`: pruebas automatizadas.
 
-La suite local aprobó 84 pruebas; son pruebas simuladas y no sustituyen la validación contra Google Sheets, Drive, Apps Script o teléfonos reales.
+## Pruebas
 
-## Publicar la demo en GitHub Pages
-
-1. Sube **el contenido de esta carpeta** al repositorio público `DETECO/inspecciones-5s-deteco` (no subas el ZIP como un único archivo).
-2. En GitHub, abre **Settings → Pages**. Selecciona **Deploy from a branch**, rama `main`, carpeta `/(root)` y guarda.
-3. La demo quedará en `https://deteco.github.io/inspecciones-5s-deteco/app/`.
-
-Antes de usarla en producción, despliega y autoriza Apps Script, configura `app/config.js`, conecta Sheets/Drive y prueba el flujo desde teléfonos. Genera los QR definitivos solo después de verificar esa conexión. No compartas enlaces administrativos ni tokens QR.
+La suite local aprobó 94 pruebas con almacenamiento simulado. Esto valida la lógica, pero no reemplaza la prueba real desde un teléfono. Antes del uso rutinario, valida con una estación coordinada el inicio, respuestas, fotografías, sincronización y cierre. Al iniciar, la estación queda reservada en la semana ISO actual y los datos se guardan en el Sheet y Drive reales.
