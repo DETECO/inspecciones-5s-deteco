@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{color-scheme:light;--blue:#103f68;--blue-ink:#0a2a46;--orange:#f26a21;--orange-dark:#cf4f11;--orange-pale:#fff1e8;--green:#15805b;--green-pale:#e8f7f0;--red:#b7372e;--red-pale:#fff0ee;--ink:#1a2835;--muted:#627080;--line:#dbe2e8;--canvas:#edf1f4;--paper:#fff;font-family:Inter,"Segoe UI",Arial,sans-serif}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--ink);background:var(--canvas)}button,textarea{font:inherit}button{cursor:pointer}button:focus-visible,textarea:focus-visible{outline:3px solid #f26a2166;outline-offset:2px}
+    header{padding:20px max(20px,calc((100vw - 1120px)/2));color:#fff;background:var(--blue);border-top:8px solid var(--orange)}.brandline{display:flex;justify-content:space-between;align-items:center;gap:14px}.brand{font-size:16px;font-weight:900;letter-spacing:.08em}.badge{padding:7px 10px;border:1px solid #ffffff55;border-radius:999px;color:#ffede2;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.heading{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-top:22px}.heading h1{margin:0;color:#fff;font-size:clamp(27px,4vw,38px);letter-spacing:-.045em}.heading p{margin:7px 0 0;color:#d8e4ed;font-size:14px}.week{padding:8px 11px;border:1px solid #ffffff55;border-radius:8px;font-size:12px;font-weight:850;white-space:nowrap}
+    main{width:min(100% - 32px,1120px);margin:24px auto 60px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.count{color:var(--muted);font-size:13px}.refresh{min-height:42px;padding:0 14px;border:1px solid #cbd6df;border-radius:9px;color:var(--blue-ink);background:#fff;font-weight:800}.notice{margin:0 0 18px;padding:13px 15px;border-left:4px solid var(--orange);border-radius:0 10px 10px 0;color:#75401f;background:#fff7f1;font-size:13px;line-height:1.5}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}.station{min-height:174px;padding:17px;border:1px solid var(--line);border-radius:13px;background:var(--paper);box-shadow:0 5px 16px #0c26360b}.station-top{display:flex;justify-content:space-between;align-items:start;gap:8px}.station h2{margin:0;color:var(--blue-ink);font-size:16px;letter-spacing:-.02em}.state{padding:5px 8px;border-radius:999px;color:#607080;background:#eef2f5;font-size:10px;font-weight:850;white-space:nowrap}.state.open{color:#8e3a11;background:var(--orange-pale)}.state.closed{color:#145b42;background:var(--green-pale)}.state.expired{color:#7a2722;background:var(--red-pale)}.details{display:grid;gap:5px;margin:15px 0;color:var(--muted);font-size:12px}.details strong{color:var(--ink)}.release{min-height:41px;padding:0 12px;border:1px solid var(--orange);border-radius:8px;color:white;background:var(--orange);font-size:12px;font-weight:850}.release:hover{background:var(--orange-dark)}.empty-action{color:var(--muted);font-size:12px}.message{margin:30px auto;max-width:620px;padding:20px;border:1px solid var(--line);border-radius:12px;background:white;line-height:1.5}.message.error{border-left:4px solid var(--red);color:#7a2722;background:var(--red-pale)}.loading{color:var(--muted);text-align:center;padding:35px}
+    dialog{width:min(92vw,520px);padding:0;border:0;border-radius:14px;box-shadow:0 20px 70px #071c2d55}dialog::backdrop{background:#0b233a88}.dialog-head{padding:18px 20px;color:white;background:var(--blue);border-top:6px solid var(--orange)}.dialog-head h2{margin:0;font-size:20px}.dialog-body{padding:18px 20px}.warning{padding:12px;border-left:4px solid var(--orange);border-radius:0 8px 8px 0;color:#75401f;background:#fff7f1;font-size:13px;line-height:1.5}.field{display:grid;gap:7px;margin-top:16px}.field label{color:#33485c;font-size:12px;font-weight:850}.field textarea{width:100%;min-height:86px;padding:11px;border:1px solid #cbd6df;border-radius:9px;resize:vertical}.buttons{display:flex;justify-content:end;gap:9px;margin-top:17px}.cancel,.confirm{min-height:43px;padding:0 14px;border-radius:8px;font-size:12px;font-weight:850}.cancel{border:1px solid #cbd6df;color:var(--blue-ink);background:white}.confirm{border:1px solid var(--orange);color:white;background:var(--orange)}.confirm:disabled{border-color:#d9dfe4;color:#85919c;background:#e7eaed}
+    @media(max-width:760px){header{padding:16px 17px}.heading{align-items:start;flex-direction:column;gap:12px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:520px){main{width:calc(100% - 24px);margin-top:16px}.grid{grid-template-columns:1fr}.station{min-height:0}.toolbar{align-items:start;flex-direction:column}.refresh{width:100%}.station h2{font-size:17px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+    .add-work{margin:0 0 18px;padding:17px;border:1px solid var(--line);border-top:4px solid var(--orange);border-radius:11px;background:#fff}.add-work h2{margin:0;color:var(--blue-ink);font-size:17px}.add-work p{margin:6px 0 12px;color:var(--muted);font-size:12px;line-height:1.5}.work-form{display:flex;align-items:end;gap:10px}.work-field{display:grid;flex:1;gap:6px}.work-field label,.work-result label{color:#33485c;font-size:12px;font-weight:850}.work-field input,.work-result input{width:100%;min-height:43px;padding:10px 12px;border:1px solid #cbd6df;border-radius:8px;font:inherit}.work-submit,.copy-link{min-height:43px;padding:0 13px;border:1px solid var(--orange);border-radius:8px;color:#fff;background:var(--orange);font-size:12px;font-weight:850}.work-submit:disabled,.copy-link:disabled{border-color:#d9dfe4;color:#85919c;background:#e7eaed}.work-result{margin-top:13px;padding:12px;border-radius:8px;color:#145b42;background:var(--green-pale);font-size:13px;line-height:1.5}.work-result.warning{color:#75401f;background:#fff7f1}.work-result.error{color:#7a2722;background:var(--red-pale)}.work-result[hidden]{display:none}.work-result label{display:block;margin:11px 0 6px}.work-link-row{display:flex;gap:8px}.work-link-row input{background:#fff;font-size:12px}.copy-link{flex:none;border-color:var(--blue);background:var(--blue)}.station-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.qr-copy{min-height:37px;padding:0 10px;font-size:11px}
+    .qr-dialog{width:min(92vw,480px)}.qr-dialog-body{text-align:center}.qr-dialog-station{margin:0 0 14px;color:var(--blue-ink);font-size:18px;font-weight:900}.qr-preview{display:grid;place-items:center;width:min(68vw,280px);aspect-ratio:1;margin:0 auto;padding:13px;border:1px solid var(--line);border-radius:12px;background:#fff}.qr-preview svg{display:block;width:100%;height:100%}.qr-help{margin:12px auto 0;max-width:340px;color:var(--muted);font-size:12px;line-height:1.5}.qr-actions{justify-content:center;flex-wrap:wrap}.qr-actions button{min-height:40px}.qr-print-root{display:none}
+    @media(max-width:520px){.work-form{align-items:stretch;flex-direction:column}.work-submit{width:100%}.work-link-row{align-items:stretch;flex-direction:column}.copy-link{width:100%}}
+    @media print{@page{margin:12mm}body{background:#fff!important}body>*:not(#qr-print-root){display:none!important}#qr-print-root[hidden]{display:flex!important}#qr-print-root{position:fixed;inset:0;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:5mm;padding:0;color:#000;background:#fff;text-align:center;font-family:Arial,sans-serif}#qr-print-title{margin:0;font-size:22pt}#qr-print-svg{width:68mm;height:68mm}#qr-print-svg svg{display:block;width:100%;height:100%}#qr-print-root p{margin:0;font-size:12pt}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brandline"><div class="brand">DETECO · 5S</div><div class="badge">Administración</div></div>
+    <div class="heading"><div><h1>Control de estaciones</h1><p>Administra las obras y las reservas de inspección autorizadas.</p></div><div id="week" class="week">Conectando…</div></div>
+  </header>
+  <main>
+    <div id="message" class="message loading" role="status">Verificando tu cuenta y cargando las estaciones…</div>
+    <section id="panel" hidden>
+      <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
+      <div id="action-notice" class="notice" hidden role="status"></div>
+      <div id="release-notice" class="notice">La liberación conserva respuestas y fotos ya sincronizadas. Lo que siga guardado únicamente en el teléfono desconectado no estará disponible aquí y ese teléfono perderá el permiso para sincronizar como editor.</div>
+      <section id="add-work" class="add-work" hidden aria-labelledby="add-work-title">
+        <h2 id="add-work-title">Agregar una obra</h2>
+        <p>Cada obra nueva se agrega como una sola estación. No cambia las estaciones existentes.</p>
+        <form id="work-form" class="work-form">
+          <div class="work-field"><label for="work-name">Nombre de la obra</label><input id="work-name" name="name" type="text" minlength="2" maxlength="60" autocomplete="organization" placeholder="Ej.: OBRA PARQUE NORTE" required></div>
+          <button id="work-submit" class="work-submit" type="submit">Agregar obra</button>
+        </form>
+        <div id="work-result" class="work-result" hidden role="status"></div>
+      </section>
+      <div id="stations" class="grid"></div>
+    </section>
+  </main>
+  <dialog id="release-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-head"><h2 id="dialog-title">Liberar estación</h2></div>
+    <form id="release-form" class="dialog-body">
+      <p id="dialog-station" class="small"></p>
+      <div class="warning">Confirma solo si el teléfono actual no puede volver a conectarse. Los cambios que no alcanzaron a sincronizarse podrían perderse al continuar desde otro equipo.</div>
+      <div class="field"><label for="reason">Motivo (opcional)</label><textarea id="reason" maxlength="500" placeholder="Si quieres, agrega un contexto breve."></textarea></div>
+      <p id="form-error" class="small" role="alert" hidden></p>
+      <div class="buttons"><button id="cancel" class="cancel" type="button">Cancelar</button><button id="confirm" class="confirm" type="submit">Confirmar liberación</button></div>
+    </form>
+  </dialog>
+  <dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-dialog-title">
+    <div class="dialog-head"><h2 id="qr-dialog-title">QR de estación</h2></div>
+    <div class="dialog-body qr-dialog-body">
+      <p id="qr-dialog-station" class="qr-dialog-station"></p>
+      <div id="qr-preview" class="qr-preview" role="img"></div>
+      <p class="qr-help">Este QR contiene el acceso directo a la estación. Imprímelo y colócalo en el tablero de esa área.</p>
+      <div class="buttons qr-actions"><button id="qr-close" class="cancel" type="button">Cerrar</button><button id="qr-copy" class="copy-link" type="button">Copiar enlace</button><button id="qr-download" class="copy-link" type="button">Descargar SVG</button><button id="qr-print" class="confirm" type="button">Imprimir QR</button></div>
+    </div>
+  </dialog>
+  <section id="qr-print-root" class="qr-print-root" hidden aria-hidden="true"><h1 id="qr-print-title"></h1><div id="qr-print-svg"></div><p>Inspección 5S · DETECO</p></section>
+  <script>
+    /*__LOCAL_QR_LIBRARY__*/
+  </script>
+  <script>
+    (() => {
+      const state = { snapshot: null, selected: null, qrStation: null, qrSvg: '', busy: false, creatingWork: false };
+      const el = id => document.getElementById(id);
+      const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+      const formatDate = value => {
+        if (!value) return 'Aún no iniciada';
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? 'Fecha no disponible' : date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
+      };
+      const statusLabel = status => ({new:'Sin iniciar',open:'En progreso',closed:'Cerrada',expired:'Cerrada incompleta'})[status] || 'Estado desconocido';
+      function showMessage(text, type = '') {
+        const message = el('message');
+        message.className = `message ${type}`;
+        message.textContent = text;
+        message.hidden = false;
+        el('panel').hidden = true;
+      }
+      function showPanel(snapshot) {
+        state.snapshot = snapshot;
+        el('message').hidden = true;
+        el('panel').hidden = false;
+        el('week').textContent = snapshot.week.replace('-', ' · ');
+        el('who').textContent = `Sesión autorizada: ${snapshot.adminEmail}`;
+        el('action-notice').hidden = true;
+        el('release-notice').hidden = !snapshot.permissions?.canRelease;
+        el('add-work').hidden = !snapshot.permissions?.canConfigure;
+        el('stations').innerHTML = snapshot.stations.map(station => {
+          const canRelease = snapshot.permissions?.canRelease && station.status === 'open' && station.editorId;
+          const details = station.status === 'open'
+            ? `<div>Responsable inicial: <strong>${escapeHtml(station.startedBy || 'Sin asignar')}</strong></div><div>Reserva actual: <strong>${escapeHtml(station.editorName || 'Sin editor')}</strong></div><div>Inicio: <strong>${escapeHtml(formatDate(station.startedAt))}</strong></div>`
+            : `<div>Responsable inicial: <strong>${escapeHtml(station.startedBy || '—')}</strong></div>`;
+          const action = canRelease
+            ? `<button class="release" type="button" data-station="${escapeHtml(station.stationId)}">Liberar estación</button>`
+            : `<span class="empty-action">${station.status === 'open' && station.editorId && !snapshot.permissions?.canRelease ? 'Sin permiso para liberar' : station.status === 'open' && !station.editorId ? 'Sin reserva activa' : 'No requiere liberación'}</span>`;
+          const qrAction = snapshot.permissions?.canConfigure && station.qrUrl
+            ? `<button class="copy-link qr-copy" type="button" data-qr="${escapeHtml(station.stationId)}">Ver / imprimir QR</button>`
+            : '';
+          return `<article class="station"><div class="station-top"><h2>${escapeHtml(station.stationName)}</h2><span class="state ${escapeHtml(station.status)}">${escapeHtml(statusLabel(station.status))}</span></div><div class="details">${details}</div><div class="station-actions">${action}${qrAction}</div></article>`;
+        }).join('');
+        el('stations').querySelectorAll('[data-station]').forEach(button => button.addEventListener('click', () => openDialog(button.dataset.station)));
+        el('stations').querySelectorAll('[data-qr]').forEach(button => button.addEventListener('click', () => {
+          const station = state.snapshot?.stations.find(item => item.stationId === button.dataset.qr);
+          openQrDialog(station);
+        }));
+      }
+      function openQrDialog(station) {
+        if (!station?.qrUrl || typeof qrcode !== 'function') return;
+        const qr = qrcode(0, 'M');
+        qr.addData(station.qrUrl, 'Byte');
+        qr.make();
+        const svg = qr.createSvgTag({ cellSize: 4, margin: 16, scalable: true });
+        state.qrStation = station;
+        state.qrSvg = svg;
+        el('qr-dialog-station').textContent = station.stationName;
+        el('qr-preview').innerHTML = svg;
+        el('qr-preview').setAttribute('aria-label', `Código QR para ${station.stationName}`);
+        el('qr-print-title').textContent = station.stationName;
+        el('qr-print-svg').innerHTML = svg;
+        el('qr-copy').textContent = 'Copiar enlace';
+        el('qr-dialog').showModal();
+      }
+      async function copyCurrentQrLink() {
+        if (!state.qrStation?.qrUrl) return;
+        try {
+          await navigator.clipboard.writeText(state.qrStation.qrUrl);
+          el('qr-copy').textContent = 'Enlace copiado';
+        } catch {
+          window.prompt('Copia el enlace que debe abrir este QR:', state.qrStation.qrUrl);
+        }
+      }
+      function downloadCurrentQr() {
+        if (!state.qrStation || !state.qrSvg) return;
+        const fileName = state.qrStation.stationName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-|-$/g, '');
+        const url = URL.createObjectURL(new Blob([state.qrSvg], { type: 'image/svg+xml;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `DETECO-5S-${fileName || 'estacion'}.svg`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      }
+      function load() {
+        el('refresh').disabled = true;
+        if (!state.snapshot) showMessage('Verificando tu cuenta y cargando las estaciones…', 'loading');
+        google.script.run.withSuccessHandler(snapshot => {
+          el('refresh').disabled = false;
+          showPanel(snapshot);
+        }).withFailureHandler(error => {
+          el('refresh').disabled = false;
+          showMessage(error?.message || 'No se pudo validar el acceso. Inicia sesión con una cuenta autorizada.', 'error');
+        }).app5sAdminState();
+      }
+      function openDialog(stationId) {
+        const station = state.snapshot?.stations.find(item => item.stationId === stationId);
+        if (!station) return;
+        state.selected = station;
+        el('dialog-station').textContent = `${station.stationName} · ${state.snapshot.week} · reservada por ${station.editorName || 'Inspector sin nombre'}`;
+        el('reason').value = '';
+        el('form-error').hidden = true;
+        el('confirm').disabled = false;
+        el('release-dialog').showModal();
+      }
+      el('refresh').addEventListener('click', load);
+      el('qr-close').addEventListener('click', () => el('qr-dialog').close());
+      el('qr-copy').addEventListener('click', copyCurrentQrLink);
+      el('qr-download').addEventListener('click', downloadCurrentQr);
+      el('qr-print').addEventListener('click', () => window.print());
+      el('work-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const name = el('work-name').value.trim();
+        if (name.length < 2 || name.length > 60 || state.creatingWork) return;
+        if (!window.confirm(`Se agregará “${name}” como una nueva estación de tipo obra. ¿Continuar?`)) return;
+        state.creatingWork = true;
+        el('work-submit').disabled = true;
+        el('work-submit').textContent = 'Agregando…';
+        el('work-result').hidden = true;
+        google.script.run.withSuccessHandler(result => {
+          state.creatingWork = false;
+          el('work-submit').disabled = false;
+          el('work-submit').textContent = 'Agregar obra';
+          el('work-name').value = '';
+          showPanel(result.snapshot);
+          const notice = el('work-result');
+          notice.className = `work-result${result.qrUrl ? '' : ' warning'}`;
+          notice.textContent = result.qrUrl
+            ? `${result.stationName} quedó agregada. Copia el enlace para crear o imprimir el QR.`
+            : `${result.stationName} quedó agregada. El enlace QR estará disponible cuando se publique y configure la dirección pública de la app.`;
+          if (result.qrUrl) {
+            const label = document.createElement('label');
+            label.htmlFor = 'work-qr-url';
+            label.textContent = 'Enlace que debe codificar el QR';
+            const row = document.createElement('div');
+            row.className = 'work-link-row';
+            const input = document.createElement('input');
+            input.id = 'work-qr-url';
+            input.type = 'url';
+            input.readOnly = true;
+            input.value = result.qrUrl;
+            const copy = document.createElement('button');
+            copy.className = 'copy-link';
+            copy.type = 'button';
+            copy.textContent = 'Copiar enlace QR';
+            copy.addEventListener('click', async () => {
+              try {
+                await navigator.clipboard.writeText(input.value);
+                copy.textContent = 'Enlace copiado';
+              } catch {
+                input.select();
+                copy.textContent = 'Selecciona y copia el enlace';
+              }
+            });
+            row.append(input, copy);
+            const station = result.snapshot?.stations.find(item => item.stationId === result.stationId);
+            if (station?.qrUrl) {
+              const print = document.createElement('button');
+              print.className = 'copy-link';
+              print.type = 'button';
+              print.textContent = 'Ver / imprimir QR';
+              print.addEventListener('click', () => openQrDialog(station));
+              row.append(print);
+            }
+            notice.append(label, row);
+          }
+          notice.hidden = false;
+          el('work-result').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }).withFailureHandler(error => {
+          state.creatingWork = false;
+          el('work-submit').disabled = false;
+          el('work-submit').textContent = 'Agregar obra';
+          const notice = el('work-result');
+          notice.className = 'work-result error';
+          notice.textContent = error?.message || 'No se pudo agregar la obra. Actualiza y vuelve a intentarlo.';
+          notice.hidden = false;
+        }).app5sAdminAddWork({ name });
+      });
+      el('cancel').addEventListener('click', () => el('release-dialog').close());
+      el('release-form').addEventListener('submit', event => {
+        event.preventDefault();
+        const station = state.selected;
+        const reason = el('reason').value.trim();
+        if (!station || reason.length > 500 || state.busy) return;
+        state.busy = true;
+        el('confirm').disabled = true;
+        el('confirm').textContent = 'Liberando…';
+        google.script.run.withSuccessHandler(snapshot => {
+          state.busy = false;
+          el('confirm').textContent = 'Confirmar liberación';
+          el('release-dialog').close();
+          showPanel(snapshot);
+          el('action-notice').textContent = `Estación ${station.stationName} liberada. Los datos sincronizados se conservaron.`;
+          el('action-notice').hidden = false;
+          el('action-notice').style.borderLeftColor = 'var(--green)';
+          el('action-notice').style.background = 'var(--green-pale)';
+        }).withFailureHandler(error => {
+          state.busy = false;
+          el('confirm').disabled = false;
+          el('confirm').textContent = 'Confirmar liberación';
+          el('form-error').textContent = error?.message || 'No se pudo liberar la estación. Actualiza el panel y revisa su estado.';
+          el('form-error').hidden = false;
+        }).app5sAdminRelease({
+          stationId: station.stationId,
+          week: state.snapshot.week,
+          expectedEditorId: station.editorId,
+          reason,
+          confirmed: true,
+        });
+      });
+      load();
+    })();
+  </script>
+</body>
+</html>
