@@ -233,8 +233,8 @@ function header() {
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M4 4h10v10H4zM18 4h10v10H18zM4 18h10v10H4zM18 18h10v10H18z" stroke="currentColor" stroke-width="3"/><path d="M14 4v10M18 18v10M4 14h10M18 14h10" stroke="white" stroke-width="2"/></svg></span><span>DETECO 5S</span></div><span class="mode-pill">5S semanal</span></div>
-        <div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div>${state.route ? `<span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span>` : ''}</div>
+        <div class="brand-row"><div class="brand"><img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></div><span class="mode-pill">5S semanal</span></div>
+        ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
         <div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
       </div>
@@ -248,12 +248,18 @@ function errorNotice() {
 
 function qrPage() {
   return `
-    <section class="page-enter">
-      <div class="eyebrow">Acceso requerido</div>
-      <h1>Escanea el QR de la estación</h1>
-      <p class="lead">Para iniciar o retomar una inspección debes entrar por el QR instalado en el tablero de la estación.</p>
-      <div class="notice"><span class="notice-icon">↗</span><span>Abre la cámara de tu teléfono y escanea el código. La app validará estación, semana y disponibilidad antes de permitir cambios.</span></div>
-      <div class="empty">No se puede seleccionar una estación manualmente desde esta pantalla.</div>
+    <section class="welcome-page page-enter">
+      <div class="eyebrow">Acceso por QR</div>
+      <h1>Inspección 5S</h1>
+      <p class="lead">Para iniciar o retomar una inspección, entra desde el código QR instalado en el tablero de tu estación.</p>
+      <figure class="welcome-visual"><img src="./assets/qr-estacion-hero.png" alt="Un teléfono escanea un QR ilustrativo en un tablero de estación de trabajo"><figcaption>Imagen referencial. Escanea el código QR físico del tablero de tu estación.</figcaption></figure>
+      <ol class="welcome-steps" aria-label="Cómo entrar a una inspección">
+        <li class="welcome-step"><span class="step-number">1</span><div><h2>Abre la cámara</h2><p>Usa la cámara de tu teléfono.</p></div></li>
+        <li class="welcome-step"><span class="step-number">2</span><div><h2>Escanea el QR</h2><p>Apunta al código del tablero de tu estación.</p></div></li>
+        <li class="welcome-step"><span class="step-number">3</span><div><h2>Continúa la inspección</h2><p>La app identificará la estación y la semana.</p></div></li>
+      </ol>
+      <div class="notice"><span class="notice-icon" aria-hidden="true">↗</span><span>El código QR abre la estación correcta y permite comenzar o retomar el avance guardado.</span></div>
+      <div class="empty">Esta página general no inicia una inspección. Para continuar, escanea el QR del tablero de tu estación.</div>
     </section>`;
 }
 
