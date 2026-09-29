@@ -18,6 +18,12 @@ test('solo acepta un acuse de Google que coincide con solicitud y nonce', () => 
   assert.deepEqual(decodeBridgeResult(receipt.data.encodedResult), { ok: true });
 });
 
+test('acepta el acuse de Google aunque lo envíe un marco interno de Apps Script', () => {
+  const outerFrame = {};
+  const nestedFrameReceipt = { ...receipt, source: {} };
+  assert.equal(isTrustedBridgeReceipt(nestedFrameReceipt, { ...expected, source: outerFrame }), true);
+});
+
 test('descarta mensajes de otra web o de una solicitud antigua', () => {
   assert.equal(isTrustedBridgeReceipt({ ...receipt, origin: 'https://evil.example' }, expected), false);
   assert.equal(isTrustedBridgeReceipt({ ...receipt, data: { ...receipt.data, nonce: 'other' } }, expected), false);

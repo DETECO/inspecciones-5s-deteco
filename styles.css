@@ -191,3 +191,82 @@ h3 { margin-bottom: 6px; color: var(--charcoal); font-size: 15px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Portada y lector QR: jerarquía visual DETECO según la referencia aprobada. */
+.home-main { width: 100%; max-width: none; margin: 0; padding: 0 0 48px; }
+.welcome-page { max-width: none; margin: 0; }
+.welcome-visual { overflow: hidden; margin: 0; border: 0; border-radius: 0; background: #e9e6e0; }
+.welcome-visual img { display: block; width: 100%; height: clamp(360px, 61svh, 680px); aspect-ratio: auto; object-fit: cover; object-position: center; }
+.welcome-panel { position: relative; width: min(100%, 800px); margin: -38px auto 0; padding: 30px clamp(24px, 7vw, 70px) 28px; border-radius: 28px 28px 0 0; color: var(--ink); background: #fff; box-shadow: 0 -8px 28px #49474110; }
+.welcome-accent { display: block; width: 72px; height: 12px; margin: 0 0 28px; border-radius: 999px; background: var(--orange); }
+.welcome-panel h1 { margin: 0 0 10px; color: #171c22; font-size: clamp(38px, 8.5vw, 58px); font-weight: 850; letter-spacing: -.055em; line-height: 1.05; }
+.welcome-panel .lead { max-width: none; margin: 0 0 26px; color: #737d89; font-size: clamp(19px, 4.5vw, 26px); line-height: 1.35; }
+.scan-cta { display: flex; align-items: center; justify-content: center; gap: 16px; min-height: 72px; border-radius: 14px; font-size: 22px; font-weight: 800; box-shadow: 0 4px 0 #ce4e12; }
+.scan-cta img { width: 42px; height: 42px; filter: brightness(0) invert(1); }
+.help-link { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 0; border: 0; color: #68727e; background: transparent; font-size: clamp(15px, 3.8vw, 19px); font-weight: 700; }
+.help-link img { width: 27px; height: 27px; opacity: .68; }
+.help-link:hover { color: var(--charcoal); }
+.scan-note { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 62px; margin-top: 13px; border-top: 1px solid var(--line); color: #747d88; font-size: clamp(15px, 3.7vw, 18px); }
+.scan-note img { width: 28px; height: 28px; opacity: .68; }
+.help-dialog { width: min(92vw, 480px); padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; color: var(--ink); background: #fff; box-shadow: 0 20px 70px #49474133; }
+.help-dialog::backdrop { background: #27262288; backdrop-filter: blur(3px); }
+.help-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 19px; border-top: 5px solid var(--orange); border-bottom: 1px solid var(--line); }
+.help-dialog-head .brand-logo { display: block; width: min(220px, 60vw); max-height: 48px; object-fit: contain; mix-blend-mode: multiply; }
+.help-close { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; padding: 8px; border: 1px solid var(--line); border-radius: 50%; background: #fff; }
+.help-close img { width: 22px; height: 22px; }
+.help-dialog-body { padding: 22px; }
+.help-dialog-body h2 { color: var(--charcoal); font-size: 24px; }
+.help-dialog-body ol { display: grid; gap: 14px; margin: 0 0 22px; padding-left: 24px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.help-dialog-body li::marker { color: var(--orange); font-weight: 900; }
+.scanner-header { position: relative; padding: 12px 18px 16px; }
+.scanner-header-inner { display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; gap: 8px; max-width: 760px; margin: auto; }
+.scanner-header-inner .brand-logo { display: block; width: min(235px, 58vw); max-height: 53px; margin: auto; object-fit: contain; mix-blend-mode: multiply; }
+.scanner-back { display: grid; place-items: center; width: 42px; height: 42px; padding: 8px; border: 0; border-radius: 50%; background: transparent; }
+.scanner-back:hover { background: #f5f4f1; }
+.scanner-back img { width: 25px; height: 25px; opacity: .74; }
+.scanner-header h1 { margin: 6px 0 0; color: #171c22; font-size: clamp(25px, 6.5vw, 34px); text-align: center; }
+.scanner-page { max-width: 760px; margin: 0 auto; padding-top: 5px; }
+.scanner-instruction { margin: 0 0 15px; color: #69737f; font-size: clamp(17px, 4.4vw, 21px); text-align: center; }
+.scan-stage { position: relative; height: clamp(320px, 56svh, 610px); min-height: 320px; overflow: hidden; border-radius: 24px; background: #3b3935; box-shadow: 0 9px 25px #4947411c; }
+.camera-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.scan-reticle { position: absolute; top: 50%; left: 50%; width: min(62vw, 290px); height: min(62vw, 290px); opacity: .96; filter: brightness(0) saturate(100%) invert(50%) sepia(81%) saturate(2380%) hue-rotate(349deg) brightness(101%) contrast(101%); transform: translate(-50%, -50%) scale(1.25); pointer-events: none; }
+.camera-controls { display: flex; align-items: center; justify-content: center; gap: clamp(14px, 5vw, 28px); width: fit-content; max-width: 100%; min-height: 76px; margin: 16px auto 0; padding: 10px 20px; border: 1px solid #eeece7; border-radius: 999px; background: #fff; box-shadow: 0 8px 26px #49474112; }
+.flash-toggle { display: inline-flex; align-items: center; gap: 9px; min-height: 50px; padding: 7px 12px; border: 0; border-radius: 999px; color: var(--charcoal); background: transparent; font-size: 15px; font-weight: 800; }
+.flash-toggle img { width: 22px; height: 22px; filter: brightness(0) saturate(100%) invert(50%) sepia(81%) saturate(2380%) hue-rotate(349deg) brightness(101%) contrast(101%); }
+.flash-toggle:disabled { color: #77736c; opacity: .72; }
+.flash-toggle.is-on { color: #a44919; background: var(--orange-pale); }
+.flash-state { color: #85817a; font-size: 11px; font-weight: 650; }
+.camera-status { display: inline-flex; align-items: center; gap: 9px; padding-left: clamp(13px, 4vw, 25px); border-left: 1px solid var(--line); color: #6d7782; font-size: 14px; white-space: nowrap; }
+.camera-status-dot { width: 10px; height: 10px; border-radius: 50%; background: #b5b1aa; }
+.camera-status-dot.active { background: #1fb35b; box-shadow: 0 0 0 4px #1fb35b20; }
+.scan-feedback { min-height: 28px; margin: 14px 0 0; color: #6c7581; font-size: 14px; text-align: center; }
+.scan-feedback.is-error { color: var(--red); }
+.camera-error { position: absolute; right: 16px; bottom: 16px; left: 16px; padding: 14px 16px; border-left: 4px solid var(--red); border-radius: 10px; color: #712a23; background: #fff7f4; font-size: 14px; line-height: 1.45; }
+.camera-error[hidden], .camera-retry[hidden] { display: none; }
+.camera-retry { position: absolute; right: 26px; bottom: 92px; left: 26px; min-height: 48px; border: 1px solid var(--orange); border-radius: 10px; color: #fff; background: var(--orange); font-weight: 800; }
+
+@media (min-width: 680px) {
+  .welcome-panel { width: min(86%, 800px); margin-top: -44px; padding-top: 36px; border-radius: 30px 30px 0 0; }
+  .scan-stage { height: min(55vh, 610px); }
+}
+
+@media (max-width: 420px) {
+  .header-inner .brand-logo { width: min(240px, 39vw); max-height: 44px; }
+  .mode-pill { display: inline-flex; padding: 7px 14px; font-size: 11px; }
+  .welcome-visual img { height: min(53svh, 550px); min-height: 340px; }
+  .welcome-panel { margin-top: -14px; padding: 22px 21px 18px; border-radius: 22px 22px 0 0; }
+  .welcome-accent { width: 62px; height: 10px; margin-bottom: 17px; margin-left: 6px; }
+  .welcome-panel h1 { margin-bottom: 7px; padding-left: 6px; font-size: clamp(35px, 9vw, 42px); }
+  .welcome-panel .lead { margin-bottom: 20px; padding-left: 6px; font-size: 18px; }
+  .scan-cta { min-height: 62px; gap: 11px; border-radius: 12px; font-size: 19px; }
+  .scan-cta img { width: 34px; height: 34px; }
+  .help-link { min-height: 50px; font-size: 15px; }
+  .help-link img { width: 23px; height: 23px; }
+  .scan-note { min-height: 52px; margin-top: 8px; gap: 8px; font-size: 14px; }
+  .scan-note img { width: 24px; height: 24px; }
+  .scan-reticle { width: min(42vw, 190px); height: min(42vw, 190px); }
+  .camera-controls { gap: 10px; padding: 8px 13px; }
+  .flash-toggle { gap: 7px; padding: 6px 8px; font-size: 14px; }
+  .flash-state { max-width: 60px; white-space: normal; }
+  .camera-status { gap: 7px; padding-left: 12px; font-size: 12px; }
+}

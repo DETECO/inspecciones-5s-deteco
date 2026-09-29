@@ -11,7 +11,9 @@ export function isTrustedBridgeReceipt(event, expected) {
   if (data.channel !== BRIDGE_CHANNEL) return false;
   if (data.requestId !== expected.requestId || data.nonce !== expected.nonce) return false;
   if (typeof data.encodedResult !== 'string' || !data.encodedResult) return false;
-  if (expected.source && event.source !== expected.source) return false;
+  // Apps Script may relay the response from a nested googleusercontent sandbox,
+  // whose WindowProxy is different from the form's outer iframe. Origin plus
+  // the per-request nonce and ID authenticate the receipt without that check.
   return true;
 }
 

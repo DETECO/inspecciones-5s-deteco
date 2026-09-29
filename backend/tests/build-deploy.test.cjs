@@ -36,3 +36,14 @@ test('el paquete administrativo incluye el generador QR local y no depende de te
   assert.match(qr.createSvgTag({ scalable: true, margin: 16 }), /^<svg\b/);
   new vm.Script(scripts[1]);
 });
+
+test('la administración usa la identidad visual DETECO clara con el logo oficial', () => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'deteco-5s-admin-brand-'));
+  writeDeploy(output);
+  const admin = fs.readFileSync(path.join(output, 'Admin.html'), 'utf8');
+  assert.match(admin, /class="brand-logo"[^>]+alt="DETECO/);
+  assert.match(admin, /--charcoal:#494741/i);
+  assert.match(admin, /--orange:#f26522/i);
+  assert.match(admin, /header[^}]*background:#fff/i);
+  assert.doesNotMatch(admin, /class="brand">DETECO · 5S/);
+});

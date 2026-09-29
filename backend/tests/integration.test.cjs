@@ -131,6 +131,49 @@ test('la instalación da formato a Configuracion y prepara las validaciones para
   assert.equal(config.filterCreated, true);
 });
 
+test('al reutilizar una hoja preparada inicializa accesos QR sin crear otro libro', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const originalSheetId = h.props.APP5S_SHEET_ID;
+  const originalFolderId = h.props.APP5S_FOLDER_ID;
+  const accesses = book.getSheetByName('Accesos');
+  accesses.rows.slice(1).forEach(row => { row[1] = ''; row[2] = false; });
+  h.props.APP5S_OWNER_EMAIL = '';
+  h.props.APP5S_FIRST_WEEK = '';
+
+  const result = h.api.instalarApp5SCompleta();
+
+  assert.equal(result.reused, true);
+  assert.equal(h.books.size, 1, 'no debe crear un segundo libro');
+  assert.equal(h.props.APP5S_SHEET_ID, originalSheetId);
+  assert.equal(h.props.APP5S_FOLDER_ID, originalFolderId);
+  assert.equal(h.props.APP5S_OWNER_EMAIL, 'ivan.vivanco@deteco.cl');
+  assert.equal(h.props.APP5S_FIRST_WEEK, '2026-W39');
+  assert.equal(h.props.APP5S_FRONTEND_URL, 'https://deteco.github.io/inspecciones-5s-deteco/');
+  assert.equal(h.props.APP5S_FRONTEND_ORIGIN, 'https://deteco.github.io');
+  assert.equal(accesses.rows.length, 10);
+  accesses.rows.slice(1).forEach(row => {
+    assert.match(row[1], /^[A-Za-z0-9_-]{32,}$/);
+    assert.equal(row[2], true);
+  });
+});
+
+test('una tabla Accesos duplicada no recibe una activación QR parcial', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const accesses = book.getSheetByName('Accesos');
+  accesses.rows.slice(1).forEach(row => { row[1] = ''; row[2] = false; });
+  accesses.rows.push(['bodega', '', false]);
+
+  assert.throws(() => h.api.instalarApp5SCompleta(), /una sola fila para BODEGA/i);
+  accesses.rows.slice(1).forEach(row => {
+    assert.equal(row[1], '', 'no debe generar tokens antes de validar todas las estaciones');
+    assert.equal(row[2], false, 'no debe activar parcialmente las estaciones');
+  });
+});
+
 test('el alta de una obra crea una estación, habilita su acceso y devuelve su QR cuando hay URL pública', () => {
   const h = harness();
   h.api.instalarApp5SCompleta();
@@ -200,6 +243,9 @@ test('la ruta completa guarda la inspección y la foto una sola vez en Sheet y D
   assert.equal(closed.state.accessToken, undefined);
   const book = h.books.get(h.props.APP5S_SHEET_ID);
   assert.equal(book.getSheetByName('Inspecciones').rows.length, 2);
+  const moduleHistory = book.getSheetByName('Puntajes modulo').rows.slice(1);
+  assert.equal(moduleHistory.length, 5);
+  assert.deepEqual(moduleHistory.map(row => row[5]), [4.75, 5, 5, 5, 5]);
   assert.equal(book.getSheetByName('Respuestas').rows.length, 26);
   assert.equal(book.getSheetByName('Hallazgos').rows.length, 2);
   assert.equal(book.getSheetByName('Kaizen').rows.length, 2);
@@ -210,6 +256,22 @@ test('la ruta completa guarda la inspección y la foto una sola vez en Sheet y D
   assert.equal(nextWeek.state.pendingKaizen[0].id, 'K-finding-12345678');
   const root = h.root.getFoldersByName('INSPECCIONES 5S').next();
   assert.equal(root.getFoldersByName('BODEGA').next().getFoldersByName('2026-09').next().getFoldersByName('2026-W39').next().getFoldersByName('Hallazgos').next().files.length, 1);
+});
+
+test('Santa Julia guarda el hallazgo en la carpeta existente SANTA JULIA', () => {
+  const h = harness();
+  const root = h.root.getFoldersByName('INSPECCIONES 5S').next();
+  const existing = root.createFolder('SANTA JULIA');
+  h.api.instalarApp5SCompleta();
+  const base = { stationId: 'obra-santa-julia', accessToken: accessFor(h, 'obra-santa-julia'), clientId: 'phone-a' };
+  call(h, 'reserve', { ...base, inspectorName: 'Ana Pérez' });
+  call(h, 'save-answer', { ...base, questionId: 'SEP-01', count: 1 });
+  call(h, 'save-finding', { ...base, questionId: 'SEP-01', ordinal: 1, finding: {
+    id: 'finding-santa-julia', dataUri: 'data:image/jpeg;base64,AAAA', note: 'Prueba de carpeta',
+  } });
+
+  assert.equal(existing.getFoldersByName('2026-09').next().getFoldersByName('2026-W39').next().getFoldersByName('Hallazgos').next().files.length, 1);
+  assert.equal(root.getFoldersByName('OBRA SANTA JULIA').hasNext(), false);
 });
 
 test('la respuesta aparece en la pestaña de su estación mientras la inspección sigue abierta', () => {
@@ -283,4 +345,5 @@ test('la primera inspección de la semana cierra la anterior sin inicio a nombre
   assert.equal(history[8], 0);
   assert.equal(history[9], 'vencida-cerrada-incompleta');
   assert.equal(history[10], 'Sin encargado asignado');
+  assert.deepEqual(book.getSheetByName('Puntajes modulo').rows.slice(1).map(row => row[5]), [0, 0, 0, 0, 0]);
 });

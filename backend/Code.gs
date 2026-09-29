@@ -1,5 +1,7 @@
 const APP5S_PARENT_FOLDER = 'INSPECCIONES 5S';
-const APP5S_BOOK = 'CONTROL INSPECCIONES 5S DETECO';
+const APP5S_BOOK = 'CONTROL INSPECCIONES 5S';
+const APP5S_DEFAULT_FRONTEND_URL = 'https://deteco.github.io/inspecciones-5s-deteco/';
+const APP5S_DEFAULT_FRONTEND_ORIGIN = 'https://deteco.github.io';
 const APP5S_TABLES = {
   Configuracion: ['Estación ID', 'Estación', 'Tipo', 'Encargado del área', 'Activa', 'Latitud', 'Longitud', 'Radio m'],
   Administradores: ['Correo Google Workspace', 'Nombre', 'Activo', 'Puede liberar estaciones', 'Puede cambiar configuración', 'Notas'],
@@ -8,6 +10,7 @@ const APP5S_TABLES = {
   Accesos: ['Estación ID', 'Token QR', 'Activo'],
   Estado: ['Estación ID', 'Semana ISO', 'Estado', 'JSON de estado', 'Actualizado servidor'],
   Inspecciones: ['Inspección ID', 'Estación ID', 'Semana ISO', 'Estado', 'Responsable inicial', 'Cerrada por', 'Inicio', 'Cierre', 'Nota final', 'Estado de cumplimiento', 'Responsable incumplimiento'],
+  'Puntajes modulo': ['Registro ID', 'Inspección ID', 'Estación ID', 'Semana ISO', 'Módulo', 'Puntaje', 'Estado de cumplimiento', 'Cierre'],
   Respuestas: ['Respuesta ID', 'Inspección ID', 'Estación ID', 'Semana ISO', 'Pregunta ID', 'Hallazgos', 'Puntos', 'Módulo'],
   Hallazgos: ['Hallazgo ID', 'Inspección ID', 'Estación ID', 'Semana ISO', 'Pregunta ID', 'Orden', 'Foto Drive ID', 'Nota', 'Kaizen ID', 'Estado'],
   Kaizen: ['Kaizen ID', 'Estación ID', 'Estado', 'Pregunta ID', 'Hallazgo origen ID', 'Recurrencia de', 'Responsable', 'Apertura', 'Cierre'],
@@ -110,14 +113,27 @@ function instalarApp5SCompleta() {
   const existingSheet = props.getProperty('APP5S_SHEET_ID');
   const existingFolder = props.getProperty('APP5S_FOLDER_ID');
   if (existingSheet && existingFolder) {
-    SpreadsheetApp.openById(existingSheet);
-    DriveApp.getFolderById(existingFolder);
-    return { installed: true, reused: true };
+    const book = SpreadsheetApp.openById(existingSheet);
+    const folder = DriveApp.getFolderById(existingFolder);
+    if (!book || !folder) throw new Error('No se pudo abrir la hoja o carpeta configurada para 5S.');
+    app5sVerifyPreparedBook_(book);
+    app5sEnsureStationAccess_(book);
+    const firstWeek = props.getProperty('APP5S_FIRST_WEEK') || isoWeekChile(app5sNow_()).key;
+    const frontendUrl = props.getProperty('APP5S_FRONTEND_URL') || APP5S_DEFAULT_FRONTEND_URL;
+    const frontendOrigin = props.getProperty('APP5S_FRONTEND_ORIGIN') || APP5S_DEFAULT_FRONTEND_ORIGIN;
+    props.setProperties({
+      APP5S_OWNER_EMAIL: activeEmail,
+      APP5S_FIRST_WEEK: firstWeek,
+      APP5S_FRONTEND_URL: frontendUrl,
+      APP5S_FRONTEND_ORIGIN: frontendOrigin,
+    });
+    app5sProtectAdminDirectory_(book);
+    return { installed: true, reused: true, sheetId: existingSheet, folderId: existingFolder };
   }
   if (existingSheet || existingFolder) throw new Error('La instalación quedó parcial; revísala antes de repetirla.');
   const parent = app5sOnlyFolder_(DriveApp.getRootFolder(), APP5S_PARENT_FOLDER, 'Debe existir una sola carpeta INSPECCIONES 5S en Mi unidad.');
   const existingBook = parent.getFilesByName(APP5S_BOOK);
-  if (existingBook.hasNext()) throw new Error('Ya existe un libro CONTROL INSPECCIONES 5S DETECO sin instalación registrada; revísalo antes de crear recursos.');
+  if (existingBook.hasNext()) throw new Error(`Ya existe un libro ${APP5S_BOOK} sin instalación registrada; revísalo antes de crear recursos.`);
   const book = SpreadsheetApp.create(APP5S_BOOK);
   app5sCreateTables_(book);
   DriveApp.getFileById(book.getId()).moveTo(parent);
@@ -126,8 +142,50 @@ function instalarApp5SCompleta() {
     APP5S_FOLDER_ID: parent.getId(),
     APP5S_OWNER_EMAIL: String(Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '').trim().toLowerCase(),
     APP5S_FIRST_WEEK: isoWeekChile(app5sNow_()).key,
+    APP5S_FRONTEND_URL: props.getProperty('APP5S_FRONTEND_URL') || APP5S_DEFAULT_FRONTEND_URL,
+    APP5S_FRONTEND_ORIGIN: props.getProperty('APP5S_FRONTEND_ORIGIN') || APP5S_DEFAULT_FRONTEND_ORIGIN,
   });
   return { installed: true, reused: false, sheetId: book.getId(), folderId: parent.getId() };
+}
+
+function app5sVerifyPreparedBook_(book) {
+  Object.entries(APP5S_TABLES).forEach(([name, headers]) => {
+    const sheet = book.getSheetByName(name);
+    if (!sheet) throw new Error(`Falta la pestaña ${name}; no se modificó la hoja.`);
+    const actual = sheet.getRange(1, 1, 1, headers.length).getValues()[0].map(value => String(value || '').trim());
+    if (headers.some((header, index) => actual[index] !== header)) {
+      throw new Error(`La estructura de ${name} no coincide con la app; no se modificó la hoja.`);
+    }
+  });
+  STATIONS.forEach(station => {
+    const sheet = book.getSheetByName(station.name);
+    if (!sheet) throw new Error(`Falta la pestaña de estación ${station.name}; no se modificó la hoja.`);
+    const expected = app5sStationHeaders_();
+    const actual = sheet.getRange(1, 1, 1, expected.length).getValues()[0].map(value => String(value || '').trim());
+    if (expected.some((header, index) => actual[index] !== header)) {
+      throw new Error(`La estructura de ${station.name} no coincide con la app; no se modificó la hoja.`);
+    }
+  });
+  const config = book.getSheetByName('Configuracion');
+  const rows = config.getLastRow() > 1 ? config.getRange(2, 1, config.getLastRow() - 1, 2).getValues() : [];
+  STATIONS.forEach(station => {
+    const matches = rows.filter(row => String(row[0]).trim() === station.id && String(row[1]).trim() === station.name);
+    if (matches.length !== 1) throw new Error(`Configuracion debe contener una sola fila para ${station.name}; no se modificó la hoja.`);
+  });
+}
+
+function app5sEnsureStationAccess_(book) {
+  const sheet = book.getSheetByName('Accesos');
+  const accessRows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues() : [];
+  const validatedStations = STATIONS.map(station => {
+    const stationRows = accessRows.map((row, index) => ({ row, index })).filter(item => String(item.row[0]).trim() === station.id);
+    if (stationRows.length !== 1) throw new Error(`Accesos debe contener una sola fila para ${station.name}; no se generaron códigos QR.`);
+    return { station, ...stationRows[0] };
+  });
+  validatedStations.forEach(({ row, index }) => {
+    if (!String(row[1] || '').trim()) sheet.getRange(index + 2, 2).setValue(app5sMakeStationToken_());
+    if (!app5sAdminEnabled_(row[2])) sheet.getRange(index + 2, 3).setValue(true);
+  });
 }
 
 function app5sOnlyFolder_(parent, name, error) {
@@ -204,10 +262,15 @@ function app5sFormatConfigurationSheet_(sheet) {
 function app5sProtectAdminDirectory_(book) {
   const sheet = book.getSheetByName('Administradores');
   if (typeof sheet.protect !== 'function') return;
-  const protection = sheet.protect().setDescription('Solo el propietario puede administrar la lista de autorizaciones 5S.');
+  const description = 'Solo el propietario puede administrar la lista de autorizaciones 5S.';
+  const protections = typeof sheet.getProtections === 'function' && SpreadsheetApp.ProtectionType
+    ? sheet.getProtections(SpreadsheetApp.ProtectionType.SHEET)
+    : [];
+  const existing = protections.find(item => item.getDescription() === description);
+  const protection = (existing || sheet.protect()).setDescription(description);
   protection.setWarningOnly(false);
-  protection.addEditor(Session.getEffectiveUser());
   protection.removeEditors(protection.getEditors());
+  protection.addEditor(Session.getEffectiveUser());
   if (protection.canDomainEdit()) protection.setDomainEdit(false);
 }
 
@@ -476,7 +539,8 @@ function app5sSavePhoto_(state, dataUri, id, category) {
   const root = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('APP5S_FOLDER_ID'));
   const station = app5sStationById_(state.stationId, true);
   if (!station) throw new Error('Estación inválida.');
-  const stationFolder = app5sSubfolder_(root, station.name);
+  const folderName = station.id === 'obra-santa-julia' ? 'SANTA JULIA' : station.name;
+  const stationFolder = app5sSubfolder_(root, folderName);
   const monthFolder = app5sSubfolder_(stationFolder, app5sMonth_(new Date(state.startedAt || new Date())));
   const weekFolder = app5sSubfolder_(monthFolder, state.week);
   const categoryFolder = app5sSubfolder_(weekFolder, category);
@@ -776,6 +840,13 @@ function app5sSyncProgress_(state) {
   if (state.status === 'expired' || state.status === 'closed') {
     const inspectionId = `${state.stationId}:${state.week}`;
     app5sUpsert_('Inspecciones', 1, inspectionId, [inspectionId, state.stationId, state.week, state.status, state.startedBy || '', state.closedBy || '', state.startedAt || '', state.closedAt || '', state.result?.finalScore ?? 0, state.result?.completionStatus || '', state.responsibleName || '']);
+    MODULES.forEach((module, index) => {
+      const recordId = `${inspectionId}:${module.id}`;
+      app5sUpsert_('Puntajes modulo', 1, recordId, [
+        recordId, inspectionId, state.stationId, state.week, module.title,
+        moduleScores[index], state.result?.completionStatus || state.status, state.closedAt || '',
+      ]);
+    });
   }
 }
 

@@ -6,6 +6,8 @@ import { resolveAppConfig } from './config.mjs';
 import { createIndexedDraftStore } from './draft-store.mjs';
 import { createBridgeSession } from './bridge-session.mjs';
 import { createFormBridge } from '../transport/form-client.mjs';
+import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
+import { scannedStationUrl } from './scanned-qr.mjs';
 import { mergeServerState } from './state-merge.mjs';
 import {
   createInspection,
@@ -38,8 +40,16 @@ const state = {
   bridgeSession: null,
   knownInspectors: [],
   previousWeekAlert: null,
+  scanError: '',
+  flashAvailable: false,
+  flashOn: false,
   clientId: localStorage.getItem(clientKey) || crypto.randomUUID(),
 };
+
+let qrScanner = null;
+let scannerNavigationPending = false;
+let lastInvalidQr = '';
+let lastInvalidQrAt = 0;
 
 if (!localStorage.getItem(clientKey)) localStorage.setItem(clientKey, state.clientId);
 
@@ -116,7 +126,7 @@ async function initializeApp() {
       }
     } catch (error) {
       state.error = `No se pudo cargar la inspección: ${error.message}`;
-      state.syncStatus = 'Sin conexión';
+      state.syncStatus = navigator.onLine ? 'Sin respuesta' : 'Sin conexión';
     }
   }
   render();
@@ -228,14 +238,22 @@ function syncLabel() {
 }
 
 function header() {
+  const logo = '<img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción">';
+  if (state.screen === 'scanner') {
+    return `
+      <header class="header scanner-header">
+        <div class="scanner-header-inner"><button class="scanner-back" type="button" data-action="close-scanner" aria-label="Volver"><img src="./assets/icons/arrow-left.svg" alt=""></button>${logo}</div>
+        <h1>Escanear estación</h1>
+      </header>`;
+  }
   const title = state.route ? stationName() : 'INSPECCIÓN 5S';
   const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${QUESTIONS.length} respuestas` : 'Acceso por QR';
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand"><img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></div><span class="mode-pill">5S semanal</span></div>
+        <div class="brand-row"><div class="brand">${logo}</div><span class="mode-pill">5S semanal</span></div>
         ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
-        <div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>
+        ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine && state.syncStatus === 'Sincronizado' ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>` : ''}
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
       </div>
     </header>`;
@@ -249,18 +267,199 @@ function errorNotice() {
 function qrPage() {
   return `
     <section class="welcome-page page-enter">
-      <div class="eyebrow">Acceso por QR</div>
-      <h1>Inspección 5S</h1>
-      <p class="lead">Para iniciar o retomar una inspección, entra desde el código QR instalado en el tablero de tu estación.</p>
-      <figure class="welcome-visual"><img src="./assets/qr-estacion-hero.png" alt="Un teléfono escanea un QR ilustrativo en un tablero de estación de trabajo"><figcaption>Imagen referencial. Escanea el código QR físico del tablero de tu estación.</figcaption></figure>
-      <ol class="welcome-steps" aria-label="Cómo entrar a una inspección">
-        <li class="welcome-step"><span class="step-number">1</span><div><h2>Abre la cámara</h2><p>Usa la cámara de tu teléfono.</p></div></li>
-        <li class="welcome-step"><span class="step-number">2</span><div><h2>Escanea el QR</h2><p>Apunta al código del tablero de tu estación.</p></div></li>
-        <li class="welcome-step"><span class="step-number">3</span><div><h2>Continúa la inspección</h2><p>La app identificará la estación y la semana.</p></div></li>
-      </ol>
-      <div class="notice"><span class="notice-icon" aria-hidden="true">↗</span><span>El código QR abre la estación correcta y permite comenzar o retomar el avance guardado.</span></div>
-      <div class="empty">Esta página general no inicia una inspección. Para continuar, escanea el QR del tablero de tu estación.</div>
+      <figure class="welcome-visual"><img src="./assets/qr-estacion-hero.png" alt="Un inspector escanea el código QR de una estación DETECO en la planta"></figure>
+      <section class="welcome-panel" aria-labelledby="welcome-title">
+        <span class="welcome-accent" aria-hidden="true"></span>
+        <h1 id="welcome-title">Inspección 5S</h1>
+        <p class="lead">Escanea el QR para iniciar.</p>
+        <button class="primary scan-cta" type="button" data-action="open-scanner"><img src="./assets/icons/scan.svg" alt=""><span>Escanear QR</span></button>
+        <button class="help-link" type="button" data-action="show-scan-help"><img src="./assets/icons/info-circle.svg" alt=""><span>¿Necesitas ayuda? Ver instrucciones</span></button>
+        <div class="scan-note"><img src="./assets/icons/qrcode.svg" alt=""><span>La estación se reconoce con el QR.</span></div>
+      </section>
+      <dialog class="help-dialog" id="scan-help-dialog" aria-labelledby="scan-help-title">
+        <div class="help-dialog-head"><img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO"><button class="help-close" type="button" data-action="close-scan-help" aria-label="Cerrar"><img src="./assets/icons/x.svg" alt=""></button></div>
+        <div class="help-dialog-body"><h2 id="scan-help-title">Cómo iniciar</h2><ol><li>Toca <strong>Escanear QR</strong> y permite el acceso a la cámara.</li><li>Centra el código del tablero dentro del marco.</li><li>La estación se abrirá automáticamente para identificarte.</li></ol><button class="primary" type="button" data-action="close-scan-help">Entendido</button></div>
+      </dialog>
     </section>`;
+}
+
+function scannerPage() {
+  return `
+    <section class="scanner-page page-enter" aria-label="Escáner QR de estaciones">
+      <p class="scanner-instruction">Centra el QR dentro del marco</p>
+      <div class="scan-stage">
+        <video id="qr-camera" class="camera-video" autoplay muted playsinline poster="./assets/qr-estacion-hero.png" aria-label="Vista de la cámara para escanear el QR"></video>
+        <img class="scan-reticle" src="./assets/icons/scan-eye.svg" alt="" aria-hidden="true">
+        <div id="camera-error" class="camera-error" role="alert" hidden></div>
+        <button id="retry-camera" class="camera-retry" type="button" data-action="retry-camera" hidden>Reintentar cámara</button>
+      </div>
+      <div class="camera-controls">
+        <button id="flash-toggle" class="flash-toggle" type="button" data-action="toggle-flash" aria-pressed="false" disabled><img src="./assets/icons/bolt.svg" alt=""><span class="flash-label">Linterna</span><span id="flash-state" class="flash-state">Preparando</span></button>
+        <span class="camera-status"><i id="camera-status-dot" class="camera-status-dot"></i><span id="camera-status">Iniciando cámara</span></span>
+      </div>
+      <p id="scan-feedback" class="scan-feedback" aria-live="polite">La lectura comienza automáticamente.</p>
+    </section>`;
+}
+
+function setScanFeedback(message, isError = false) {
+  const feedback = document.querySelector('#scan-feedback');
+  if (!feedback) return;
+  feedback.textContent = message;
+  feedback.classList.toggle('is-error', isError);
+}
+
+function setCameraStatus(message, active = false) {
+  const label = document.querySelector('#camera-status');
+  if (label) label.textContent = message;
+  document.querySelector('#camera-status-dot')?.classList.toggle('active', active);
+}
+
+function cameraErrorMessage(error) {
+  if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return 'Permite el acceso a la cámara en los ajustes del navegador para escanear el QR.';
+  if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return 'No se encontró una cámara disponible en este dispositivo.';
+  if (error?.name === 'NotReadableError' || error?.name === 'TrackStartError') return 'La cámara está ocupada por otra aplicación. Ciérrala e inténtalo de nuevo.';
+  return 'No se pudo iniciar la cámara. Comprueba el permiso e inténtalo nuevamente.';
+}
+
+function showCameraError(error) {
+  state.scanError = cameraErrorMessage(error);
+  const message = document.querySelector('#camera-error');
+  if (message) {
+    message.textContent = state.scanError;
+    message.hidden = false;
+  }
+  const retry = document.querySelector('#retry-camera');
+  if (retry) retry.hidden = false;
+  const flash = document.querySelector('#flash-toggle');
+  if (flash) flash.disabled = true;
+  const flashState = document.querySelector('#flash-state');
+  if (flashState) flashState.textContent = 'No disponible';
+  setCameraStatus('Cámara no disponible');
+}
+
+function disposeQrScanner() {
+  const scanner = qrScanner;
+  qrScanner = null;
+  if (!scanner) return;
+  try { scanner.stop(); } catch { /* La cámara ya puede estar detenida. */ }
+  scanner.destroy();
+}
+
+async function startQrScanner() {
+  const video = document.querySelector('#qr-camera');
+  if (!video || state.screen !== 'scanner') return;
+  const cameraError = document.querySelector('#camera-error');
+  if (cameraError) cameraError.hidden = true;
+  const retry = document.querySelector('#retry-camera');
+  if (retry) retry.hidden = true;
+  const flash = document.querySelector('#flash-toggle');
+  if (flash) flash.disabled = true;
+  const flashState = document.querySelector('#flash-state');
+  if (flashState) flashState.textContent = 'Preparando';
+  setCameraStatus('Iniciando cámara');
+  setScanFeedback('La lectura comienza automáticamente.');
+
+  if (!QrScanner.isSupported()) {
+    showCameraError({ name: 'NotSupportedError' });
+    return;
+  }
+
+  const scanner = new QrScanner(video, handleScannedQr, {
+    preferredCamera: 'environment',
+    maxScansPerSecond: 12,
+    returnDetailedScanResult: true,
+    onDecodeError: () => {},
+  });
+  qrScanner = scanner;
+  try {
+    await scanner.start();
+    if (qrScanner !== scanner || state.screen !== 'scanner') {
+      scanner.stop();
+      scanner.destroy();
+      return;
+    }
+    state.flashAvailable = await scanner.hasFlash().catch(() => false);
+    state.flashOn = false;
+    if (flash) {
+      flash.disabled = !state.flashAvailable;
+      flash.setAttribute('aria-pressed', 'false');
+      flash.classList.remove('is-on');
+    }
+    if (flashState) flashState.textContent = state.flashAvailable ? 'Disponible' : 'No disponible';
+    setCameraStatus('Cámara activa', true);
+  } catch (error) {
+    if (qrScanner === scanner) {
+      qrScanner = null;
+      scanner.destroy();
+      showCameraError(error);
+    }
+  }
+}
+
+async function handleScannedQr(result) {
+  if (scannerNavigationPending) return;
+  const value = typeof result === 'string' ? result : result?.data;
+  let destination;
+  try {
+    destination = scannedStationUrl(value, window.location.href);
+  } catch (error) {
+    const now = Date.now();
+    if (value === lastInvalidQr && now - lastInvalidQrAt < 2200) return;
+    lastInvalidQr = value || '';
+    lastInvalidQrAt = now;
+    setScanFeedback(error.message, true);
+    return;
+  }
+
+  scannerNavigationPending = true;
+  setScanFeedback('Estación reconocida. Abriendo inspección…');
+  const scanner = qrScanner;
+  qrScanner = null;
+  if (scanner) {
+    try { await scanner.stop(); } catch { /* La navegación continuará aunque el stream ya se haya detenido. */ }
+    scanner.destroy();
+  }
+  window.location.assign(destination);
+}
+
+function openScanner() {
+  disposeQrScanner();
+  scannerNavigationPending = false;
+  state.scanError = '';
+  state.flashAvailable = false;
+  state.flashOn = false;
+  state.screen = 'scanner';
+  render();
+  startQrScanner();
+}
+
+function closeScanner() {
+  disposeQrScanner();
+  scannerNavigationPending = false;
+  state.scanError = '';
+  state.screen = 'qr';
+  render();
+}
+
+function retryCamera() {
+  disposeQrScanner();
+  state.scanError = '';
+  startQrScanner();
+}
+
+async function toggleFlashlight() {
+  if (!qrScanner || !state.flashAvailable) return;
+  const button = document.querySelector('#flash-toggle');
+  try {
+    if (qrScanner.isFlashOn()) await qrScanner.turnFlashOff();
+    else await qrScanner.turnFlashOn();
+    state.flashOn = qrScanner.isFlashOn();
+    button?.setAttribute('aria-pressed', String(state.flashOn));
+    button?.classList.toggle('is-on', state.flashOn);
+    setScanFeedback(state.flashOn ? 'Linterna encendida.' : 'Linterna apagada.');
+  } catch {
+    setScanFeedback('La linterna no está disponible en esta cámara.', true);
+  }
 }
 
 function scheduleMessage() {
@@ -411,20 +610,35 @@ function previousWeekNotice() {
 }
 
 function render() {
+  const activeElement = document.activeElement;
+  const preserveInspectorFocus = activeElement?.id === 'inspector-name';
+  const selectionStart = preserveInspectorFocus ? activeElement.selectionStart : null;
+  const selectionEnd = preserveInspectorFocus ? activeElement.selectionEnd : null;
+  if (preserveInspectorFocus) state.inspectorName = activeElement.value;
   let content;
-  if (!state.route) content = qrPage();
+  if (state.screen === 'scanner') content = scannerPage();
+  else if (!state.route) content = qrPage();
   else if (state.screen === 'identity') content = identityPage();
   else if (state.screen === 'kaizen') content = kaizenPage();
   else if (state.screen === 'module') content = modulePage();
   else if (state.screen === 'review') content = reviewPage();
   else if (state.screen === 'summary') content = summaryPage();
   else content = qrPage();
-  appElement.innerHTML = `${header()}<main>${previousWeekNotice()}${takeoverPrompt()}${content}</main>`;
+  const mainClass = !state.route && state.screen === 'qr' ? 'home-main' : '';
+  appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${takeoverPrompt()}${content}</main>`;
+  if (preserveInspectorFocus && state.screen === 'identity') {
+    const restoredInput = appElement.querySelector('#inspector-name');
+    if (restoredInput) {
+      restoredInput.focus({ preventScroll: true });
+      if (selectionStart !== null && selectionEnd !== null) restoredInput.setSelectionRange(selectionStart, selectionEnd);
+    }
+  }
 }
 
 async function start() {
   const input = document.querySelector('#inspector-name');
   const name = input?.value.trim() || '';
+  state.inspectorName = name;
   if (name.length < 2) {
     state.error = 'Escribe tu nombre para continuar.';
     render();
@@ -464,6 +678,7 @@ async function start() {
 
 async function requestTakeoverFromCurrentEditor() {
   const name = document.querySelector('#inspector-name')?.value.trim() || '';
+  state.inspectorName = name;
   if (name.length < 2) {
     state.error = 'Escribe tu nombre para solicitar continuar.';
     render();
@@ -511,6 +726,7 @@ async function refreshServerState() {
     if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
     if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
     state.syncStatus = 'Sincronizado';
+    if (state.error.startsWith('No se pudo cargar la inspección:')) state.error = '';
     if (state.inspection.status === 'closed' || state.inspection.status === 'expired') {
       state.screen = 'summary';
     } else if (state.inspection.editor?.clientId === state.clientId && state.inspection.startedAt) {
@@ -521,7 +737,7 @@ async function refreshServerState() {
     }
     await draftSave();
   } catch {
-    state.syncStatus = 'Sin conexión';
+    state.syncStatus = navigator.onLine ? 'Sin respuesta' : 'Sin conexión';
   }
   render();
 }
@@ -718,6 +934,12 @@ appElement.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
+  if (action === 'open-scanner') openScanner();
+  if (action === 'close-scanner') closeScanner();
+  if (action === 'retry-camera') retryCamera();
+  if (action === 'toggle-flash') toggleFlashlight();
+  if (action === 'show-scan-help') document.querySelector('#scan-help-dialog')?.showModal();
+  if (action === 'close-scan-help') document.querySelector('#scan-help-dialog')?.close();
   if (action === 'start') start();
   if (action === 'request-takeover') requestTakeoverFromCurrentEditor();
   if (action === 'approve-takeover') approveTakeover();
@@ -741,6 +963,7 @@ appElement.addEventListener('change', event => {
 
 appElement.addEventListener('input', event => {
   const target = event.target;
+  if (target.id === 'inspector-name') state.inspectorName = target.value;
   if (target.dataset.action === 'finding-note') setFindingNote(target);
   if (target.dataset.action === 'kaizen-reason') setKaizenReason(target);
 });
@@ -750,6 +973,7 @@ window.addEventListener('online', () => {
   else render();
 });
 window.addEventListener('offline', render);
+window.addEventListener('pagehide', disposeQrScanner);
 window.setInterval(refreshServerState, 10000);
 
 initializeApp();
