@@ -41,6 +41,9 @@ const state = {
   knownInspectors: [],
   previousWeekAlert: null,
   scanError: '',
+  scanNotice: '',
+  qrValidationPending: false,
+  qrAccessValidated: false,
   flashAvailable: false,
   flashOn: false,
   clientId: localStorage.getItem(clientKey) || crypto.randomUUID(),
@@ -118,13 +121,25 @@ async function initializeApp() {
         if (navigator.onLine) {
           const receipt = await state.bridgeSession.readState();
           await applyBridgeReceipt(receipt);
+          state.qrValidationPending = false;
+          state.qrAccessValidated = true;
+          state.scanNotice = `Estación ${state.station.name} reconocida. Identifícate para continuar.`;
           state.screen = state.inspection.status === 'closed' || state.inspection.status === 'expired' ? 'summary' : 'identity';
           state.inspectorName ||= state.inspection.editor?.inspectorName || state.inspection.startedBy || '';
         } else {
+          state.qrValidationPending = false;
+          state.scanNotice = `QR leído: ${state.station.name}. Sin conexión; solo se puede continuar un avance ya reservado en este teléfono.`;
           state.syncStatus = state.syncQueue.length ? 'Pendiente de envío' : 'Sin conexión';
         }
+      } else {
+        state.qrValidationPending = false;
+        state.qrAccessValidated = true;
+        state.scanNotice = `Estación ${state.station.name} reconocida.`;
       }
     } catch (error) {
+      state.qrValidationPending = false;
+      state.qrAccessValidated = false;
+      state.scanNotice = `QR leído: ${state.station.name}. No se pudo validar el acceso.`;
       state.error = `No se pudo cargar la inspección: ${error.message}`;
       state.syncStatus = navigator.onLine ? 'Sin respuesta' : 'Sin conexión';
     }
@@ -205,8 +220,12 @@ function activateRoute() {
 
 function storageReadFromSession(key) {
   try {
-    const value = sessionStorage.getItem(key);
-    return value ? JSON.parse(value) : null;
+    const value = JSON.parse(sessionStorage.getItem(key) || 'null');
+    if (!value || typeof value.stationId !== 'string' || typeof value.accessToken !== 'string') return null;
+    const url = new URL(window.location.href);
+    url.hash = new URLSearchParams({ station: value.stationId, token: value.accessToken }).toString();
+    const route = parseQrRoute(url.href);
+    return STATIONS.some(station => station.id === route.stationId) ? route : null;
   } catch {
     return null;
   }
@@ -410,20 +429,41 @@ async function handleScannedQr(result) {
   }
 
   scannerNavigationPending = true;
-  setScanFeedback('Estación reconocida. Abriendo inspección…');
-  const scanner = qrScanner;
-  qrScanner = null;
-  if (scanner) {
-    try { await scanner.stop(); } catch { /* La navegación continuará aunque el stream ya se haya detenido. */ }
-    scanner.destroy();
+  const route = parseQrRoute(destination);
+  sessionStorage.setItem(sessionKey, JSON.stringify(route));
+  state.route = route;
+  state.station = STATIONS.find(item => item.id === route.stationId) || { id: route.stationId, name: route.stationId.toUpperCase() };
+  state.screen = 'identity';
+  state.scanError = '';
+  state.qrAccessValidated = false;
+  state.scanNotice = `QR leído: ${state.station.name}. Validando acceso…`;
+  state.qrValidationPending = true;
+  disposeQrScanner();
+  render();
+  initializeApp();
+}
+
+async function retryQrValidation() {
+  if (!navigator.onLine) {
+    state.error = 'No hay conexión para validar este QR. Al recuperar internet, la validación se reintentará automáticamente.';
+    render();
+    return;
   }
-  window.location.assign(destination);
+  state.error = '';
+  state.qrAccessValidated = false;
+  state.qrValidationPending = true;
+  state.scanNotice = `Estación ${state.station.name} reconocida. Validando acceso…`;
+  render();
+  await initializeApp();
 }
 
 function openScanner() {
   disposeQrScanner();
   scannerNavigationPending = false;
   state.scanError = '';
+  state.scanNotice = '';
+  state.qrValidationPending = false;
+  state.qrAccessValidated = false;
   state.flashAvailable = false;
   state.flashOn = false;
   state.screen = 'scanner';
@@ -471,19 +511,23 @@ function identityPage() {
   if (state.inspection?.status === 'closed' || state.inspection?.status === 'expired') return summaryPage();
   const heldByOther = Boolean(state.inspection?.editor && state.inspection.editor.clientId !== state.clientId);
   const waitingForTakeover = state.inspection?.takeover?.requestedBy === state.clientId;
-  const canStart = !heldByOther && (currentWindow() === 'open' || (currentWindow() === 'late-continuation' && Boolean(state.inspection?.startedAt)));
+  const offlineDraftCanContinue = !navigator.onLine && state.inspection?.editor?.clientId === state.clientId;
+  const canStart = !state.qrValidationPending && (appConfig.mode !== 'bridge' || state.qrAccessValidated || offlineDraftCanContinue) && !heldByOther && (currentWindow() === 'open' || (currentWindow() === 'late-continuation' && Boolean(state.inspection?.startedAt)));
   const existing = Boolean(state.inspection);
   const names = [...new Set([...state.knownInspectors, ...storageRead(namesKey, [])].map(name => String(name).trim()).filter(Boolean))]
     .map(name => `<option value="${esc(name)}"></option>`).join('');
   return `
     <section class="page-enter">
       <div class="eyebrow">${existing ? 'Inspección en curso' : 'Semana disponible'}</div>
+      ${state.scanNotice ? `<div class="notice good"><span class="notice-icon">✓</span><span>${esc(state.scanNotice)}</span></div>` : ''}
       <h1>${existing ? 'Retoma la inspección' : 'Identifícate para continuar'}</h1>
       <p class="lead">${existing ? `El avance de esta estación se conserva. La responsabilidad inicial corresponde a ${esc(state.inspection.startedBy)}.` : 'Escribe tu nombre para dejar trazabilidad de quién realiza la inspección.'}</p>
       ${heldByOther ? `<div class="notice"><span class="notice-icon">↗</span><span>${waitingForTakeover ? 'Tu solicitud está enviada. Espera a que el teléfono actual entregue el control.' : `La inspección está abierta en el teléfono de ${esc(state.inspection.editor.inspectorName)}. Puedes solicitar continuarla.`}</span></div>` : ''}
+      ${appConfig.mode === 'bridge' && !state.qrAccessValidated && !state.qrValidationPending && !navigator.onLine ? '<div class="notice"><span class="notice-icon">!</span><span>El QR aún no se puede validar sin conexión. Al recuperar internet se intentará automáticamente; también puedes volver a escanearlo.</span></div>' : ''}
       ${scheduleMessage()}${errorNotice()}
       <div class="field"><label for="inspector-name">Nombre del inspector</label><input class="input" id="inspector-name" list="known-inspectors" maxlength="80" autocomplete="name" value="${esc(state.inspectorName)}" placeholder="Escribe o selecciona tu nombre"><datalist id="known-inspectors">${names}</datalist><p class="hint">Si no apareces, escribe tu nombre y se agregará para próximas inspecciones.</p></div>
       <button class="primary" data-action="${heldByOther ? 'request-takeover' : 'start'}" ${heldByOther ? waitingForTakeover ? 'disabled' : '' : canStart ? '' : 'disabled'}>${heldByOther ? waitingForTakeover ? 'Esperando autorización' : 'Solicitar continuar' : existing ? 'Retomar inspección' : 'Iniciar inspección'}</button>
+      ${appConfig.mode === 'bridge' && !state.qrAccessValidated && !state.qrValidationPending ? `<div class="identity-recovery"><button class="help-link" type="button" data-action="rescan-qr">Volver a escanear QR</button>${navigator.onLine ? '<button class="help-link" type="button" data-action="retry-qr-validation">Reintentar validación</button>' : ''}</div>` : ''}
     </section>`;
 }
 
@@ -933,6 +977,8 @@ appElement.addEventListener('click', event => {
   if (!target) return;
   const action = target.dataset.action;
   if (action === 'open-scanner') openScanner();
+  if (action === 'rescan-qr') openScanner();
+  if (action === 'retry-qr-validation') retryQrValidation();
   if (action === 'close-scanner') closeScanner();
   if (action === 'retry-camera') retryCamera();
   if (action === 'toggle-flash') toggleFlashlight();
@@ -966,8 +1012,14 @@ appElement.addEventListener('input', event => {
   if (target.dataset.action === 'kaizen-reason') setKaizenReason(target);
 });
 
-window.addEventListener('online', () => {
-  if (state.syncQueue.length) flushBridgeQueue();
+window.addEventListener('online', async () => {
+  if (appConfig.mode === 'bridge' && state.route && !state.qrAccessValidated) {
+    state.qrValidationPending = true;
+    state.scanNotice = `Conexión disponible. Validando estación ${state.station.name}…`;
+    state.error = '';
+    render();
+    await initializeApp();
+  } else if (state.syncQueue.length) flushBridgeQueue();
   else render();
 });
 window.addEventListener('offline', render);

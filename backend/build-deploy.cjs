@@ -22,6 +22,10 @@ function writeDeploy(destination = path.join(base, 'deploy')) {
     timeZone: 'America/Santiago',
     exceptionLogging: 'STACKDRIVER',
     runtimeVersion: 'V8',
+    webapp: {
+      executeAs: 'USER_DEPLOYING',
+      access: 'ANYONE_ANONYMOUS',
+    },
   };
   fs.writeFileSync(path.join(destination, 'Code.gs'), `${code}\n`, 'utf8');
   fs.writeFileSync(path.join(destination, 'Admin.html'), `${buildAdminHtml()}\n`, 'utf8');

@@ -45,24 +45,29 @@
     .admin-workspace .qr-copy:hover{background:var(--orange-dark)}
     @media(max-width:920px){.admin-shell{grid-template-columns:1fr}.admin-sidebar{position:static;min-height:0;padding:14px 22px;border-right:0;border-bottom:1px solid var(--line)}.admin-brand{padding:0;border:0}.admin-brand img{max-width:195px}.admin-nav{display:flex;gap:9px;margin-top:12px}.admin-sidebar-foot{display:none}.admin-topbar{min-height:54px;padding:0 22px}.admin-intro{padding:27px 22px 22px}.admin-workspace main{width:calc(100% - 44px)}}
     @media(max-width:520px){.admin-sidebar{padding:13px 16px}.admin-nav{margin-top:10px}.admin-nav a{min-height:41px;padding:8px 10px;font-size:12px}.admin-nav a.active{padding-left:6px}.admin-nav img{width:18px;height:18px}.admin-topbar{padding:0 16px}.admin-intro{padding:24px 16px 21px}.admin-intro h1{font-size:31px}.admin-workspace main{width:calc(100% - 24px);margin-top:16px}}
+    .kaizen-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin:0 0 16px;padding:16px;border:1px solid var(--line);border-top:4px solid var(--orange);border-radius:11px;background:#fff}
+    .kaizen-filter{display:grid;gap:6px}.kaizen-filter label{color:var(--charcoal);font-size:12px;font-weight:850}.kaizen-filter select{width:100%;min-height:42px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:#fff;font:inherit}
+    .kaizen-list{display:grid;gap:12px}.kaizen-card{padding:17px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 4px 14px #4947410b}.kaizen-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}.kaizen-heading h2{margin:0;color:var(--charcoal);font-size:16px;line-height:1.4}.kaizen-card p{margin:7px 0;color:var(--muted);font-size:13px;line-height:1.5}.kaizen-meta{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:8px;color:var(--muted);font-size:12px}.kaizen-evidence{display:grid;gap:8px;margin-top:13px}.kaizen-evidence-item{padding:11px;border-radius:8px;background:#f7f6f3}.kaizen-evidence-item strong{color:var(--charcoal);font-size:12px}.kaizen-photo{min-height:34px;padding:0 10px;border:1px solid var(--orange);border-radius:7px;color:#b74413;background:#fff;font-size:12px;font-weight:800}.kaizen-photo:hover{background:var(--orange-pale)}.kaizen-empty{padding:24px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);background:#fff;text-align:center;font-size:13px;line-height:1.5}.kaizen-warning{margin-bottom:13px}.photo-dialog{width:min(92vw,760px)}.photo-dialog img{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:8px}.photo-dialog .buttons{justify-content:center}
+    @media(max-width:520px){.kaizen-toolbar{grid-template-columns:1fr;padding:13px}.kaizen-card{padding:14px}.kaizen-heading{flex-direction:column}}
   </style>
 </head>
 <body>
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Navegación 5S">
       <a class="admin-brand" href="https://deteco.github.io/inspecciones-5s-deteco/" aria-label="Ir a Inspección 5S DETECO"><img class="brand-logo" src="https://deteco.github.io/inspecciones-5s-deteco/assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></a>
-      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="https://deteco.github.io/inspecciones-5s-deteco/"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan.svg" alt="">Inspección 5S</a></nav>
+      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" data-view="stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="#kaizen" data-view="kaizen"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan-eye.svg" alt="">Kaizen</a><a href="https://deteco.github.io/inspecciones-5s-deteco/"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan.svg" alt="">Inspección 5S</a></nav>
       <div class="admin-sidebar-foot">DETECO · Control semanal de estaciones</div>
     </aside>
     <div class="admin-workspace">
       <header class="admin-topbar"><div class="admin-breadcrumb"><strong>5S</strong><span>/</span><span>Administración</span></div><div id="week" class="week">Conectando…</div></header>
-      <section class="admin-intro"><h1>Control de estaciones</h1><p>Administra las obras, los códigos QR y las reservas de inspección.</p></section>
+      <section class="admin-intro"><h1 id="page-title">Control de estaciones</h1><p id="page-description">Administra las obras, los códigos QR y las reservas de inspección.</p></section>
       <main>
     <div id="message" class="message loading" role="status">Verificando tu cuenta y cargando las estaciones…</div>
     <section id="panel" hidden>
       <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
       <div id="action-notice" class="notice" hidden role="status"></div>
       <div id="release-notice" class="notice">La liberación conserva respuestas y fotos ya sincronizadas. Lo que siga guardado únicamente en el teléfono desconectado no estará disponible aquí y ese teléfono perderá el permiso para sincronizar como editor.</div>
+      <section id="stations-view">
       <section id="add-work" class="add-work" hidden aria-labelledby="add-work-title">
         <h2 id="add-work-title">Agregar una obra</h2>
         <p>Cada obra nueva se agrega como una sola estación. No cambia las estaciones existentes.</p>
@@ -73,6 +78,15 @@
         <div id="work-result" class="work-result" hidden role="status"></div>
       </section>
       <div id="stations" class="grid"></div>
+      </section>
+      <section id="kaizen-view" hidden aria-label="Consulta de Kaizen">
+        <div class="kaizen-toolbar">
+          <div class="kaizen-filter"><label for="kaizen-stations">Estación</label><select id="kaizen-stations"><option value="all">Todas las estaciones</option></select></div>
+          <div class="kaizen-filter"><label for="kaizen-status">Estado del Kaizen</label><select id="kaizen-status"><option value="open">Pendientes</option><option value="closed">Cerrados</option><option value="all">Todos</option></select></div>
+        </div>
+        <div id="kaizen-message" class="message loading" role="status" hidden></div>
+        <div id="kaizen-results" class="kaizen-list"></div>
+      </section>
     </section>
       </main>
     </div>
@@ -95,6 +109,10 @@
       <p class="qr-help">Este QR contiene el acceso directo a la estación. Imprímelo y colócalo en el tablero de esa área.</p>
       <div class="buttons qr-actions"><button id="qr-close" class="cancel" type="button">Cerrar</button><button id="qr-copy" class="copy-link" type="button">Copiar enlace</button><button id="qr-download" class="copy-link" type="button">Descargar SVG</button><button id="qr-print" class="confirm" type="button">Imprimir QR</button></div>
     </div>
+  </dialog>
+  <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
+    <div class="dialog-head"><h2 id="photo-title">Fotografía del Kaizen</h2></div>
+    <div class="dialog-body"><p id="photo-message" class="small" role="status" hidden></p><img id="photo-image" alt="Evidencia fotográfica del Kaizen" hidden><div class="buttons"><button id="photo-close" class="cancel" type="button">Cerrar</button></div></div>
   </dialog>
   <section id="qr-print-root" class="qr-print-root" hidden aria-hidden="true"><h1 id="qr-print-title"></h1><div id="qr-print-svg"></div><p>Inspección 5S · DETECO</p></section>
   <script>
@@ -2398,7 +2416,7 @@ var qrcode = function() {
   </script>
   <script>
     (() => {
-      const state = { snapshot: null, selected: null, qrStation: null, qrSvg: '', busy: false, creatingWork: false };
+      const state = { snapshot: null, selected: null, qrStation: null, qrSvg: '', busy: false, creatingWork: false, view: location.hash === '#kaizen' ? 'kaizen' : 'stations', kaizen: null };
       const el = id => document.getElementById(id);
       const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const formatDate = value => {
@@ -2407,6 +2425,7 @@ var qrcode = function() {
         return Number.isNaN(date.getTime()) ? 'Fecha no disponible' : date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
       };
       const statusLabel = status => ({new:'Sin iniciar',open:'En progreso',closed:'Cerrada',expired:'Cerrada incompleta'})[status] || 'Estado desconocido';
+      const kaizenStatusLabel = status => status === 'closed' ? 'Cerrado' : 'Pendiente';
       function showMessage(text, type = '') {
         const message = el('message');
         message.className = `message ${type}`;
@@ -2423,6 +2442,10 @@ var qrcode = function() {
         el('action-notice').hidden = true;
         el('release-notice').hidden = !snapshot.permissions?.canRelease;
         el('add-work').hidden = !snapshot.permissions?.canConfigure;
+        const previousStation = el('kaizen-stations').value || 'all';
+        el('kaizen-stations').innerHTML = '<option value="all">Todas las estaciones</option>' + snapshot.stations.map(station => `<option value="${escapeHtml(station.stationId)}">${escapeHtml(station.stationName)}</option>`).join('');
+        if ([...el('kaizen-stations').options].some(option => option.value === previousStation)) el('kaizen-stations').value = previousStation;
+        setView(state.view);
         el('stations').innerHTML = snapshot.stations.map(station => {
           const canRelease = snapshot.permissions?.canRelease && station.status === 'open' && station.editorId;
           const details = station.status === 'open'
@@ -2457,6 +2480,84 @@ var qrcode = function() {
         el('qr-print-svg').innerHTML = svg;
         el('qr-copy').textContent = 'Copiar enlace';
         el('qr-dialog').showModal();
+      }
+      function setView(view) {
+        state.view = view === 'kaizen' ? 'kaizen' : 'stations';
+        el('stations-view').hidden = state.view !== 'stations';
+        el('kaizen-view').hidden = state.view !== 'kaizen';
+        document.querySelectorAll('.admin-nav [data-view]').forEach(link => {
+          const active = link.dataset.view === state.view;
+          link.classList.toggle('active', active);
+          if (active) link.setAttribute('aria-current', 'page');
+          else link.removeAttribute('aria-current');
+        });
+        el('page-title').textContent = state.view === 'kaizen' ? 'Seguimiento de Kaizen' : 'Control de estaciones';
+        el('page-description').textContent = state.view === 'kaizen'
+          ? 'Consulta hallazgos, responsables, evidencias y cierres por estación.'
+          : 'Administra las obras, los códigos QR y las reservas de inspección.';
+        el('refresh').textContent = state.view === 'kaizen' ? 'Actualizar Kaizen' : 'Actualizar estados';
+        if (state.view === 'kaizen' && state.snapshot) loadKaizen();
+      }
+      function renderKaizen(result) {
+        state.kaizen = result;
+        const message = el('kaizen-message');
+        message.hidden = !result.truncated;
+        if (result.truncated) {
+          message.className = 'message kaizen-warning';
+          message.textContent = 'Se muestran los 500 Kaizen más recientes. Ajusta los filtros para acotar la consulta.';
+        }
+        const items = result.items || [];
+        if (!items.length) {
+          el('kaizen-results').innerHTML = '<div class="kaizen-empty">No hay Kaizen que coincidan con estos filtros.</div>';
+          return;
+        }
+        el('kaizen-results').innerHTML = items.map(item => {
+          const findings = (item.findings || []).map(finding => `<div class="kaizen-evidence-item"><strong>Hallazgo · ${escapeHtml(finding.week || 'Semana no registrada')}</strong><p>${escapeHtml(finding.note || 'Sin nota registrada.')}</p>${finding.hasPhoto ? `<button type="button" class="kaizen-photo" data-kaizen="${escapeHtml(item.id)}" data-evidence="${escapeHtml(finding.evidenceId)}">Ver foto del hallazgo</button>` : '<span class="empty-action">Sin fotografía</span>'}</div>`).join('');
+          const reviews = (item.reviews || []).map(review => `<div class="kaizen-evidence-item"><strong>${review.decision === 'solved' ? 'Resuelto' : 'Sigue pendiente'} · ${escapeHtml(review.week || 'Semana no registrada')}</strong><p>${escapeHtml(review.reason || (review.decision === 'solved' ? 'Cierre registrado.' : 'Sin justificación registrada.'))}</p>${review.hasPhoto ? `<button type="button" class="kaizen-photo" data-kaizen="${escapeHtml(item.id)}" data-evidence="${escapeHtml(review.evidenceId)}">Ver foto de cierre</button>` : ''}</div>`).join('');
+          const opened = formatDate(item.openedAt);
+          const closed = item.closedAt ? ` · Cierre ${escapeHtml(formatDate(item.closedAt))}` : '';
+          return `<article class="kaizen-card"><div class="kaizen-heading"><div><h2>${escapeHtml(item.stationName)} · ${escapeHtml(item.moduleTitle || '5S')}</h2><p>${escapeHtml(item.questionText)}</p></div><span class="state ${item.status === 'closed' ? 'closed' : 'open'}">${kaizenStatusLabel(item.status)}</span></div><div class="kaizen-meta"><span>Responsable: <strong>${escapeHtml(item.ownerName || 'Sin asignar')}</strong></span><span>Origen: ${escapeHtml(opened)}${closed}</span></div>${findings || reviews ? `<div class="kaizen-evidence">${findings}${reviews}</div>` : '<p>Sin notas ni seguimientos registrados.</p>'}</article>`;
+        }).join('');
+        el('kaizen-results').querySelectorAll('[data-evidence]').forEach(button => button.addEventListener('click', () => loadKaizenPhoto(button)));
+      }
+      function loadKaizen() {
+        const message = el('kaizen-message');
+        message.hidden = false;
+        message.className = 'message loading';
+        message.textContent = 'Cargando Kaizen…';
+        el('kaizen-results').innerHTML = '';
+        const filters = { stationId: el('kaizen-stations').value || 'all', status: el('kaizen-status').value || 'open' };
+        google.script.run.withSuccessHandler(renderKaizen).withFailureHandler(error => {
+          message.className = 'message error';
+          message.textContent = error?.message || 'No se pudieron cargar los Kaizen. Actualiza e inténtalo nuevamente.';
+          message.hidden = false;
+          el('kaizen-results').innerHTML = '';
+        }).app5sAdminKaizenState(filters);
+      }
+      function loadKaizenPhoto(button) {
+        const label = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Cargando foto…';
+        el('photo-image').hidden = true;
+        el('photo-image').removeAttribute('src');
+        el('photo-message').hidden = false;
+        el('photo-message').textContent = 'Buscando evidencia…';
+        el('photo-dialog').showModal();
+        google.script.run.withSuccessHandler(dataUrl => {
+          button.disabled = false;
+          button.textContent = label;
+          if (typeof dataUrl !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/.test(dataUrl)) {
+            el('photo-message').textContent = 'La evidencia recibida no es una imagen válida.';
+            return;
+          }
+          el('photo-image').src = dataUrl;
+          el('photo-image').hidden = false;
+          el('photo-message').hidden = true;
+        }).withFailureHandler(error => {
+          button.disabled = false;
+          button.textContent = label;
+          el('photo-message').textContent = error?.message || 'No se pudo abrir la fotografía.';
+        }).app5sAdminKaizenPhoto({ kaizenId: button.dataset.kaizen, evidenceId: button.dataset.evidence });
       }
       async function copyCurrentQrLink() {
         if (!state.qrStation?.qrUrl) return;
@@ -2500,7 +2601,15 @@ var qrcode = function() {
         el('confirm').disabled = false;
         el('release-dialog').showModal();
       }
-      el('refresh').addEventListener('click', load);
+      el('refresh').addEventListener('click', () => state.view === 'kaizen' ? loadKaizen() : load());
+      document.querySelectorAll('.admin-nav [data-view]').forEach(link => link.addEventListener('click', event => {
+        event.preventDefault();
+        setView(link.dataset.view);
+        history.replaceState({}, document.title, `${location.pathname}${location.search}#${state.view}`);
+      }));
+      el('kaizen-stations').addEventListener('change', loadKaizen);
+      el('kaizen-status').addEventListener('change', loadKaizen);
+      el('photo-close').addEventListener('click', () => el('photo-dialog').close());
       el('qr-close').addEventListener('click', () => el('qr-dialog').close());
       el('qr-copy').addEventListener('click', copyCurrentQrLink);
       el('qr-download').addEventListener('click', downloadCurrentQr);

@@ -1057,8 +1057,133 @@ function app5sAdminSnapshot_(adminEmail, week) {
 }
 
 function app5sAdminState() {
-  const adminEmail = app5sRequireAdminEmail_('any');
+  const adminEmail = app5sRequireAdminEmail_('view');
   return app5sWithLock_(() => app5sAdminSnapshot_(adminEmail, isoWeekChile(app5sNow_()).key));
+}
+
+function app5sAdminKaizenState(filters) {
+  const adminEmail = app5sRequireAdminEmail_('view');
+  const input = filters && typeof filters === 'object' ? filters : {};
+  const stationId = String(input.stationId || 'all');
+  const status = String(input.status || 'open');
+  if (stationId !== 'all') app5sValidStation_(stationId);
+  if (!['all', 'open', 'closed'].includes(status)) throw new Error('Filtro de estado inválido.');
+
+  const registry = app5sStationRegistry_();
+  const names = new Map(registry.map(item => [item.id, item.name]));
+  const questions = new Map(QUESTIONS.map(question => [question.id, question]));
+  const moduleTitles = new Map(MODULES.map(module => [module.id, module.title]));
+  const kaizenSheet = app5sSheet_('Kaizen');
+  const findingSheet = app5sSheet_('Hallazgos');
+  const reviewSheet = app5sSheet_('Revision Kaizen');
+  const rows = kaizenSheet.getLastRow() > 1
+    ? kaizenSheet.getRange(2, 1, kaizenSheet.getLastRow() - 1, APP5S_TABLES.Kaizen.length).getValues()
+    : [];
+  const findings = findingSheet.getLastRow() > 1
+    ? findingSheet.getRange(2, 1, findingSheet.getLastRow() - 1, APP5S_TABLES.Hallazgos.length).getValues()
+    : [];
+  const reviews = reviewSheet.getLastRow() > 1
+    ? reviewSheet.getRange(2, 1, reviewSheet.getLastRow() - 1, APP5S_TABLES['Revision Kaizen'].length).getValues()
+    : [];
+
+  const matches = rows.filter(row => row[0] && names.has(String(row[1])) &&
+    (stationId === 'all' || String(row[1]) === stationId) &&
+    (status === 'all' || String(row[2]) === status));
+  matches.sort((a, b) => String(b[7] || '').localeCompare(String(a[7] || '')));
+  const truncated = matches.length > 500;
+  const items = matches.slice(0, 500).map(row => {
+    const id = String(row[0]);
+    const question = questions.get(String(row[3]));
+    return {
+      id,
+      stationId: String(row[1]),
+      stationName: names.get(String(row[1])) || String(row[1]),
+      status: String(row[2] || 'open'),
+      questionId: String(row[3] || ''),
+      questionText: question?.text || 'Pregunta no disponible',
+      moduleTitle: question ? moduleTitles.get(question.moduleId) || '' : '',
+      ownerName: String(row[6] || 'Sin encargado asignado'),
+      openedAt: row[7] instanceof Date ? row[7].toISOString() : String(row[7] || ''),
+      closedAt: row[8] instanceof Date ? row[8].toISOString() : String(row[8] || ''),
+      findings: findings.filter(item => String(item[8]) === id).map(item => ({
+        id: String(item[0]), evidenceId: String(item[0]), hasPhoto: Boolean(item[6]), week: String(item[3] || ''), note: String(item[7] || ''),
+      })).sort((a, b) => a.week.localeCompare(b.week) || a.id.localeCompare(b.id)),
+      reviews: reviews.filter(item => String(item[1]) === id).map(item => ({
+        evidenceId: String(item[0]), hasPhoto: Boolean(item[6]), week: String(item[3] || ''), decision: String(item[4] || ''), reason: String(item[5] || ''),
+        registeredAt: item[7] instanceof Date ? item[7].toISOString() : String(item[7] || ''),
+      })).sort((a, b) => b.week.localeCompare(a.week)),
+    };
+  });
+  return {
+    adminEmail,
+    stationId,
+    status,
+    truncated,
+    stations: registry.filter(item => item.active).map(item => ({ id: item.id, name: item.name })),
+    items,
+  };
+}
+
+function app5sAdminKaizenPhoto(payload) {
+  app5sRequireAdminEmail_('view');
+  if (!payload || typeof payload !== 'object' || typeof payload.kaizenId !== 'string' ||
+      !/^[A-Za-z0-9_-]{8,160}$/.test(payload.kaizenId) || typeof payload.evidenceId !== 'string' ||
+      !/^[A-Za-z0-9_-]{8,160}(?::[0-9]{4}-W[0-9]{2})?$/.test(payload.evidenceId)) throw new Error('Solicitud de fotografía inválida.');
+  const kaizenId = payload.kaizenId;
+  const evidenceId = payload.evidenceId;
+  const findingSheet = app5sSheet_('Hallazgos');
+  const reviewSheet = app5sSheet_('Revision Kaizen');
+  const findEvidence = (sheet, columnCount, evidenceColumn, kaizenColumn, photoColumn) => {
+    if (sheet.getLastRow() < 2) return null;
+    return sheet.getRange(2, 1, sheet.getLastRow() - 1, columnCount).getValues()
+      .find(row => String(row[evidenceColumn]) === evidenceId && String(row[kaizenColumn]) === kaizenId) || null;
+  };
+  const finding = findEvidence(findingSheet, APP5S_TABLES.Hallazgos.length, 0, 8, 6);
+  const review = finding ? null : findEvidence(reviewSheet, APP5S_TABLES['Revision Kaizen'].length, 0, 1, 6);
+  const evidence = finding || review;
+  if (!evidence) throw new Error('Esta evidencia no pertenece a este Kaizen.');
+  const photoId = String(evidence[6] || '');
+  if (!photoId) throw new Error('La fotografía ya no está disponible.');
+  try {
+    const file = DriveApp.getFileById(photoId);
+    if (!app5sFileInsideInspectionFolder_(file)) throw new Error('outside-root');
+    const blob = file.getBlob();
+    const mime = String(blob.getContentType() || '').toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(mime)) throw new Error('invalid-mime');
+    const bytes = blob.getBytes();
+    if (!bytes || bytes.length > 1572864) throw new Error('invalid-size');
+    return `data:${mime};base64,${Utilities.base64Encode(bytes)}`;
+  } catch (error) {
+    if (error.message === 'outside-root') throw new Error('La fotografía no pertenece a la carpeta 5S.');
+    if (error.message === 'invalid-mime') throw new Error('El archivo no es una fotografía compatible.');
+    if (error.message === 'invalid-size') throw new Error('La fotografía supera el tamaño permitido para visualizarla.');
+    console.error(`No se pudo cargar evidencia Kaizen ${evidenceId}: ${error.message}`);
+    throw new Error('La fotografía ya no está disponible.');
+  }
+}
+
+function app5sFileInsideInspectionFolder_(file) {
+  const rootId = String(PropertiesService.getScriptProperties().getProperty('APP5S_FOLDER_ID') || '');
+  if (!rootId || !file || typeof file.getParents !== 'function') return false;
+  const queue = [];
+  const visited = new Set();
+  try {
+    const directParents = file.getParents();
+    while (directParents.hasNext()) queue.push(directParents.next());
+    while (queue.length && visited.size < 32) {
+      const folder = queue.shift();
+      const folderId = String(folder.getId());
+      if (folderId === rootId) return true;
+      if (visited.has(folderId)) continue;
+      visited.add(folderId);
+      const parents = folder.getParents();
+      while (parents.hasNext()) queue.push(parents.next());
+    }
+  } catch (error) {
+    console.error(`No se pudo comprobar la carpeta de evidencia: ${error.message}`);
+    return false;
+  }
+  return false;
 }
 
 function app5sAdminRelease(payload) {
@@ -1239,12 +1364,12 @@ function app5sAdminEnabled_(value) {
 
 function app5sAdminPermissions_(email) {
   const ownerEmail = String(PropertiesService.getScriptProperties().getProperty('APP5S_OWNER_EMAIL') || '').trim().toLowerCase();
-  if (ownerEmail && email === ownerEmail) return { canRelease: true, canConfigure: true };
+  if (ownerEmail && email === ownerEmail) return { canView: true, canRelease: true, canConfigure: true };
   const sheet = app5sSheet_('Administradores');
   const last = sheet.getLastRow();
   const rows = last > 1 ? sheet.getRange(2, 1, last - 1, APP5S_TABLES.Administradores.length).getValues() : [];
   const row = rows.find(item => String(item[0] || '').trim().toLowerCase() === email && app5sAdminEnabled_(item[2]));
-  return row ? { canRelease: app5sAdminEnabled_(row[3]), canConfigure: app5sAdminEnabled_(row[4]) } : { canRelease: false, canConfigure: false };
+  return row ? { canView: true, canRelease: app5sAdminEnabled_(row[3]), canConfigure: app5sAdminEnabled_(row[4]) } : { canView: false, canRelease: false, canConfigure: false };
 }
 
 function app5sRequireAdminEmail_(permission = 'release') {
@@ -1259,13 +1384,14 @@ function app5sRequireAdminEmail_(permission = 'release') {
     throw new Error('Usa una cuenta Google del dominio corporativo.');
   }
   const permissions = app5sAdminPermissions_(email);
-  const allowed = permission === 'any'
-    ? permissions.canRelease || permissions.canConfigure
+  const allowed = permission === 'any' || permission === 'view'
+    ? permissions.canView || permissions.canRelease || permissions.canConfigure
     : permission === 'configure' ? permissions.canConfigure : permissions.canRelease;
   if (!allowed) {
     throw new Error(permission === 'configure'
       ? 'Tu cuenta no tiene permiso para cambiar la configuración.'
-      : permission === 'any' ? 'Tu cuenta no tiene permisos habilitados para este panel.' : 'Tu cuenta no tiene permiso para liberar estaciones.');
+      : permission === 'view' ? 'Tu cuenta no tiene acceso de lectura al panel.'
+        : permission === 'any' ? 'Tu cuenta no tiene permisos habilitados para este panel.' : 'Tu cuenta no tiene permiso para liberar estaciones.');
   }
   return email;
 }

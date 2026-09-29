@@ -15,6 +15,8 @@ test('el paquete de Apps Script reúne puente, núcleo, servicio y persistencia'
   assert.match(code, /function app5sCreateService/);
   assert.match(code, /function app5sHandle_/);
   assert.equal(manifest.runtimeVersion, 'V8');
+  assert.deepEqual(manifest.webapp, { executeAs: 'USER_DEPLOYING', access: 'ANYONE_ANONYMOUS' },
+    'la versión nueva debe conservar el acceso anónimo del puente QR activo');
 });
 
 test('el paquete administrativo incluye el generador QR local y no depende de terceros', () => {
@@ -46,4 +48,18 @@ test('la administración usa la identidad visual DETECO clara con el logo oficia
   assert.match(admin, /--orange:#f26522/i);
   assert.match(admin, /header[^}]*background:#fff/i);
   assert.doesNotMatch(admin, /class="brand">DETECO · 5S/);
+});
+
+test('el panel administrativo publica una vista Kaizen con filtros y carga diferida de evidencia', () => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'deteco-5s-admin-kaizen-'));
+  writeDeploy(output);
+  const admin = fs.readFileSync(path.join(output, 'Admin.html'), 'utf8');
+  assert.match(admin, /href="#kaizen"[^>]*>[^<]*<img[^>]+>Kaizen/i);
+  assert.match(admin, /id="kaizen-stations"/);
+  assert.match(admin, /id="kaizen-status"/);
+  assert.match(admin, /\.app5sAdminKaizenState\(/);
+  assert.match(admin, /\.app5sAdminKaizenPhoto\(/);
+  assert.match(admin, /data-evidence=/);
+  assert.doesNotMatch(admin, /data-photo=|dataset\.photo/,
+    'el navegador no debe recibir IDs internos de archivos Drive');
 });

@@ -16,6 +16,7 @@ function iterator(values) {
 
 function harness() {
   let nextId = 1;
+  let activeEmail = 'ivan.vivanco@deteco.cl';
   const props = {};
   const books = new Map();
   const files = new Map();
@@ -50,11 +51,12 @@ function harness() {
     appendRow(row) { this.rows.push([...row]); }
   }
   class Folder {
-    constructor(name) { this.name = name; this.id = `folder-${nextId++}`; this.folders = []; this.files = []; }
+    constructor(name, parent = null) { this.name = name; this.id = `folder-${nextId++}`; this.parent = parent; this.folders = []; this.files = []; }
     getId() { return this.id; }
+    getParents() { return iterator(this.parent ? [this.parent] : []); }
     getFoldersByName(name) { return iterator(this.folders.filter(folder => folder.name === name)); }
     getFilesByName(name) { return iterator(this.files.filter(file => file.name === name)); }
-    createFolder(name) { const folder = new Folder(name); this.folders.push(folder); return folder; }
+    createFolder(name) { const folder = new Folder(name, this); this.folders.push(folder); return folder; }
     createFile(blob) { const file = { id: `file-${nextId++}`, name: blob.name, getId() { return this.id; }, getBlob: () => blob }; this.files.push(file); files.set(file.id, file); return file; }
   }
   const root = new Folder('Mi unidad');
@@ -87,14 +89,18 @@ function harness() {
       const find = folder => folder.id === id ? folder : folder.folders.map(find).find(Boolean);
       return find(root);
     },
-    getFileById: id => files.get(id),
+    getFileById: id => {
+      const file = files.get(id);
+      if (!file) throw new Error('Drive internal missing file');
+      return file;
+    },
   };
   const context = {
     app5sTestNow: '2026-09-21T11:15:00Z',
     Date, Intl, Object, Number, Array, Map, Set, String, RegExp, Error, TypeError, RangeError, JSON,
     SpreadsheetApp, DriveApp,
     PropertiesService: { getScriptProperties: () => ({ getProperty: key => props[key] || '', setProperties: values => Object.assign(props, values) }) },
-    Session: { getActiveUser: () => ({ getEmail: () => 'ivan.vivanco@deteco.cl' }) },
+    Session: { getActiveUser: () => ({ getEmail: () => activeEmail }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Utilities: {
       getUuid: () => `${String(nextId++).padStart(8, '0')}-1234-1234-1234-123456789abc`,
@@ -107,8 +113,22 @@ function harness() {
       }),
     },
   };
-  const api = vm.runInNewContext(`${source}\napp5sNow_ = () => new Date(app5sTestNow);\n({ instalarApp5SCompleta, app5sHandle_, app5sAdminAddWork, QUESTIONS })`, context);
-  return { api, props, root, books, setNow: value => { context.app5sTestNow = value; } };
+  const api = vm.runInNewContext(`${source}\napp5sNow_ = () => new Date(app5sTestNow);\n({ instalarApp5SCompleta, app5sHandle_, app5sAdminAddWork, app5sAdminRelease, app5sAdminState, app5sAdminKaizenState: typeof app5sAdminKaizenState === 'function' ? app5sAdminKaizenState : null, app5sAdminKaizenPhoto: typeof app5sAdminKaizenPhoto === 'function' ? app5sAdminKaizenPhoto : null, app5sAdminPermissions_, app5sRequireAdminEmail_, app5sSavePhoto_, QUESTIONS })`, context);
+  return {
+    api, props, root, books,
+    setNow: value => { context.app5sTestNow = value; },
+    setEmail: value => { activeEmail = value; },
+    addDrivePhoto: (id, mime, bytes, parentFolder = DriveApp.getFolderById(props.APP5S_FOLDER_ID)) => {
+      const file = {
+        id,
+        getParents: () => iterator(parentFolder ? [parentFolder] : []),
+        getBlob: () => ({ getContentType: () => mime, getBytes: () => bytes }),
+      };
+      files.set(id, file);
+      if (parentFolder) parentFolder.files.push(file);
+      return file;
+    },
+  };
 }
 
 function accessFor(h, stationId) {
@@ -119,6 +139,119 @@ function accessFor(h, stationId) {
 function call(h, operation, payload) {
   return h.api.app5sHandle_(operation, payload, { requestId: 'r'.repeat(24), nonce: 'n'.repeat(24), receivedAt: '2026-09-21T11:15:00Z' });
 }
+
+test('un administrador activo de solo lectura puede ver el panel, pero no liberar ni configurar', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  book.getSheetByName('Administradores').appendRow([
+    'prueba-kaizen-lectura@deteco.cl', 'Usuario de lectura', true, false, false, 'Solo lectura del panel y Kaizen',
+  ]);
+  h.setEmail('prueba-kaizen-lectura@deteco.cl');
+
+  const snapshot = h.api.app5sAdminState();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.permissions)), {
+    canView: true, canRelease: false, canConfigure: false,
+  });
+  assert.ok(snapshot.stations.every(station => !station.qrUrl), 'solo lectura no expone enlaces QR');
+  assert.throws(() => h.api.app5sAdminRelease({
+    stationId: 'oficina', week: '2026-W39', confirmed: true, expectedEditorId: 'phone-a',
+  }), /no tiene permiso para liberar estaciones/i);
+  assert.throws(() => h.api.app5sAdminAddWork({ name: 'Obra solo lectura' }), /no tiene permiso para cambiar la configuración/i);
+});
+
+test('el panel Kaizen entrega filtros ISO, datos del hallazgo y revisiones por estación', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const kaizenId = 'K-panel-12345678';
+  const findingId = 'finding-panel-12345678';
+  const findingPhotoId = 'photo-finding-12345678';
+  const closurePhotoId = 'photo-closure-12345678';
+  const rootFolder = h.root.getFoldersByName('INSPECCIONES 5S').next();
+  const nestedPhotoFolder = rootFolder.createFolder('BODEGA').createFolder('2026-09').createFolder('2026-W40').createFolder('Cierres kaizen');
+  h.addDrivePhoto(findingPhotoId, 'image/jpeg', [1, 2, 3], nestedPhotoFolder);
+  h.addDrivePhoto(closurePhotoId, 'image/png', [4, 5, 6], nestedPhotoFolder);
+  book.getSheetByName('Kaizen').appendRow([
+    kaizenId, 'bodega', 'open', 'SEP-01', findingId, '', 'Encargado Bodega', '2026-09-21T12:00:00.000Z', '',
+  ]);
+  book.getSheetByName('Hallazgos').appendRow([
+    findingId, 'bodega:2026-W39', 'bodega', '2026-W39', 'SEP-01', 1, findingPhotoId, 'Pasillo con material fuera de lugar', kaizenId, 'open',
+  ]);
+  book.getSheetByName('Revision Kaizen').appendRow([
+    `${kaizenId}:2026-W40`, kaizenId, 'bodega', '2026-W40', 'solved', 'Material retirado y sector ordenado.', closurePhotoId, '2026-09-28T12:00:00.000Z',
+  ]);
+  book.getSheetByName('Administradores').appendRow([
+    'prueba-kaizen-lectura@deteco.cl', 'Usuario de lectura', true, false, false, 'Solo lectura del panel y Kaizen',
+  ]);
+  h.setEmail('prueba-kaizen-lectura@deteco.cl');
+
+  const result = h.api.app5sAdminKaizenState({ stationId: 'bodega', status: 'all' });
+  const item = result.items.find(row => row.id === kaizenId);
+
+  assert.equal(result.stationId, 'bodega');
+  assert.equal(result.status, 'all');
+  assert.equal(item.stationName, 'BODEGA');
+  assert.equal(item.questionText, '¿Está el área de trabajo libre de artículos innecesarios?');
+  assert.equal(item.moduleTitle, 'SEPARAR');
+  assert.equal(item.ownerName, 'Encargado Bodega');
+  assert.equal(item.findings[0].week, '2026-W39');
+  assert.equal(item.findings[0].note, 'Pasillo con material fuera de lugar');
+  assert.equal(item.findings[0].evidenceId, findingId);
+  assert.equal(item.findings[0].hasPhoto, true);
+  assert.equal(item.reviews[0].evidenceId, `${kaizenId}:2026-W40`);
+  assert.equal(item.reviews[0].hasPhoto, true);
+  assert.equal(JSON.stringify(result).includes(findingPhotoId), false, 'la respuesta no expone IDs internos de Drive');
+  assert.equal(item.reviews[0].week, '2026-W40');
+  assert.equal(JSON.stringify(result).includes(closurePhotoId), false, 'tampoco expone IDs de fotos de cierre');
+  assert.deepEqual(JSON.parse(JSON.stringify(h.api.app5sAdminKaizenState({ stationId: 'oficina', status: 'all' }).items)), []);
+
+  assert.equal(
+    h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId: findingId }),
+    'data:image/jpeg;base64,AQID',
+  );
+  assert.equal(
+    h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId: `${kaizenId}:2026-W40` }),
+    'data:image/png;base64,BAUG',
+  );
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId: 'unrelated-photo-12345678' }), /no pertenece a este Kaizen/i);
+});
+
+test('el visor Kaizen rechaza fotos fuera de la raíz 5S y oculta los errores internos de Drive', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const kaizenId = 'K-root-check-12345678';
+  const evidenceId = 'finding-root-check-12345678';
+  const outsidePhotoId = 'photo-outside-root-12345678';
+  h.addDrivePhoto(outsidePhotoId, 'image/jpeg', [1, 2, 3], h.root);
+  book.getSheetByName('Kaizen').appendRow([kaizenId, 'bodega', 'open', 'SEP-01', evidenceId, '', 'Encargado', '2026-W39', '']);
+  book.getSheetByName('Hallazgos').appendRow([
+    evidenceId, 'bodega:2026-W39', 'bodega', '2026-W39', 'SEP-01', 1, outsidePhotoId, '', kaizenId, 'open',
+  ]);
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId }), /no pertenece a la carpeta 5S/i);
+
+  book.getSheetByName('Hallazgos').rows[1][6] = 'missing-drive-file-12345678';
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId }), /fotografía ya no está disponible/i);
+
+  const badMimeId = 'photo-invalid-mime-12345678';
+  h.addDrivePhoto(badMimeId, 'application/pdf', [1]);
+  book.getSheetByName('Hallazgos').rows[1][6] = badMimeId;
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId }), /no es una fotografía compatible/i);
+
+  const oversizedId = 'photo-oversized-12345678';
+  h.addDrivePhoto(oversizedId, 'image/jpeg', new Array(1572865).fill(1));
+  book.getSheetByName('Hallazgos').rows[1][6] = oversizedId;
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId, evidenceId }), /supera el tamaño permitido/i);
+});
+
+test('un usuario sin permiso de lectura no puede consultar fotos Kaizen', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  h.setEmail('operario@deteco.cl');
+  assert.throws(() => h.api.app5sAdminKaizenPhoto({ kaizenId: 'K-panel-12345678', evidenceId: 'finding-12345678' }), /no tiene acceso de lectura/i);
+});
 
 test('la instalación da formato a Configuracion y prepara las validaciones para los datos pendientes', () => {
   const h = harness();
