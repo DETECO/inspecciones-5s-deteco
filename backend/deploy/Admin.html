@@ -17,14 +17,47 @@
     .qr-dialog{width:min(92vw,480px)}.qr-dialog-body{text-align:center}.qr-dialog-station{margin:0 0 14px;color:var(--blue-ink);font-size:18px;font-weight:900}.qr-preview{display:grid;place-items:center;width:min(68vw,280px);aspect-ratio:1;margin:0 auto;padding:13px;border:1px solid var(--line);border-radius:12px;background:#fff}.qr-preview svg{display:block;width:100%;height:100%}.qr-help{margin:12px auto 0;max-width:340px;color:var(--muted);font-size:12px;line-height:1.5}.qr-actions{justify-content:center;flex-wrap:wrap}.qr-actions button{min-height:40px}.qr-print-root{display:none}
     @media(max-width:520px){.work-form{align-items:stretch;flex-direction:column}.work-submit{width:100%}.work-link-row{align-items:stretch;flex-direction:column}.copy-link{width:100%}}
     @media print{@page{margin:12mm}body{background:#fff!important}body>*:not(#qr-print-root){display:none!important}#qr-print-root[hidden]{display:flex!important}#qr-print-root{position:fixed;inset:0;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:5mm;padding:0;color:#000;background:#fff;text-align:center;font-family:Arial,sans-serif}#qr-print-title{margin:0;font-size:22pt}#qr-print-svg{width:68mm;height:68mm}#qr-print-svg svg{display:block;width:100%;height:100%}#qr-print-root p{margin:0;font-size:12pt}}
+    .admin-shell{display:grid;grid-template-columns:244px minmax(0,1fr);min-height:100vh}
+    .admin-sidebar{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;min-height:100vh;padding:29px 18px 22px;border-right:1px solid var(--line);background:#fff}
+    .admin-brand{display:block;padding:0 9px 31px;border-bottom:1px solid var(--line)}
+    .admin-brand img{display:block;width:100%;max-width:202px;height:auto;mix-blend-mode:multiply}
+    .admin-nav{display:grid;gap:7px;margin-top:23px}
+    .admin-nav a{display:flex;align-items:center;gap:12px;min-height:46px;padding:10px 13px;border-radius:9px;color:#5c6064;font-size:14px;font-weight:750;text-decoration:none}
+    .admin-nav a:hover,.admin-nav a:focus-visible{background:#f6f3f0;color:var(--charcoal)}
+    .admin-nav a.active{border-left:4px solid var(--orange);padding-left:9px;color:#bc4b16;background:var(--orange-pale)}
+    .admin-nav img{width:22px;height:22px;object-fit:contain;opacity:.77}
+    .admin-nav a.active img{filter:brightness(0) saturate(100%) invert(42%) sepia(89%) saturate(1369%) hue-rotate(352deg)}
+    .admin-sidebar-foot{margin:auto 11px 0;padding-top:25px;color:#8c8983;font-size:11px;line-height:1.5}
+    .admin-workspace{min-width:0}
+    .admin-topbar{display:flex;align-items:center;justify-content:space-between;min-height:67px;padding:0 32px;border-top:0;border-bottom:1px solid var(--line);color:#59616a;background:#fff}
+    .admin-breadcrumb{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:650}
+    .admin-breadcrumb strong{color:var(--orange);font-weight:900}
+    .admin-intro{margin:0;padding:31px 32px 24px;border-bottom:1px solid #e8e5df;background:#fff}
+    .admin-intro h1{margin:0;color:#22262c;font-size:clamp(31px,3.5vw,44px);font-weight:850;letter-spacing:-.045em;line-height:1.1}
+    .admin-intro p{margin:10px 0 0;color:#69737b;font-size:15px;line-height:1.45}
+    .admin-workspace main{width:min(calc(100% - 64px),1240px);margin:23px auto 60px}
+    .admin-workspace .toolbar{margin-bottom:17px}
+    .admin-workspace .refresh{border-color:var(--orange);color:#fff;background:var(--orange)}
+    .admin-workspace .refresh:hover{background:var(--orange-dark)}
+    .admin-workspace .station{min-height:182px;border-color:#e8e5df;border-radius:13px;box-shadow:0 5px 16px #4947410b}
+    .admin-workspace .station h2{text-transform:capitalize}
+    .admin-workspace .qr-copy{background:var(--orange);border-color:var(--orange)}
+    .admin-workspace .qr-copy:hover{background:var(--orange-dark)}
+    @media(max-width:920px){.admin-shell{grid-template-columns:1fr}.admin-sidebar{position:static;min-height:0;padding:14px 22px;border-right:0;border-bottom:1px solid var(--line)}.admin-brand{padding:0;border:0}.admin-brand img{max-width:195px}.admin-nav{display:flex;gap:9px;margin-top:12px}.admin-sidebar-foot{display:none}.admin-topbar{min-height:54px;padding:0 22px}.admin-intro{padding:27px 22px 22px}.admin-workspace main{width:calc(100% - 44px)}}
+    @media(max-width:520px){.admin-sidebar{padding:13px 16px}.admin-nav{margin-top:10px}.admin-nav a{min-height:41px;padding:8px 10px;font-size:12px}.admin-nav a.active{padding-left:6px}.admin-nav img{width:18px;height:18px}.admin-topbar{padding:0 16px}.admin-intro{padding:24px 16px 21px}.admin-intro h1{font-size:31px}.admin-workspace main{width:calc(100% - 24px);margin-top:16px}}
   </style>
 </head>
 <body>
-  <header>
-    <div class="brandline"><div class="brand"><img class="brand-logo" src="https://deteco.github.io/inspecciones-5s-deteco/assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></div><div class="badge">Administración 5S</div></div>
-    <div class="heading"><div><h1>Control de estaciones</h1><p>Administra las obras y las reservas de inspección autorizadas.</p></div><div id="week" class="week">Conectando…</div></div>
-  </header>
-  <main>
+  <div class="admin-shell">
+    <aside class="admin-sidebar" aria-label="Navegación 5S">
+      <a class="admin-brand" href="https://deteco.github.io/inspecciones-5s-deteco/" aria-label="Ir a Inspección 5S DETECO"><img class="brand-logo" src="https://deteco.github.io/inspecciones-5s-deteco/assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></a>
+      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="https://deteco.github.io/inspecciones-5s-deteco/"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan.svg" alt="">Inspección 5S</a></nav>
+      <div class="admin-sidebar-foot">DETECO · Control semanal de estaciones</div>
+    </aside>
+    <div class="admin-workspace">
+      <header class="admin-topbar"><div class="admin-breadcrumb"><strong>5S</strong><span>/</span><span>Administración</span></div><div id="week" class="week">Conectando…</div></header>
+      <section class="admin-intro"><h1>Control de estaciones</h1><p>Administra las obras, los códigos QR y las reservas de inspección.</p></section>
+      <main>
     <div id="message" class="message loading" role="status">Verificando tu cuenta y cargando las estaciones…</div>
     <section id="panel" hidden>
       <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
@@ -41,7 +74,9 @@
       </section>
       <div id="stations" class="grid"></div>
     </section>
-  </main>
+      </main>
+    </div>
+  </div>
   <dialog id="release-dialog" aria-labelledby="dialog-title">
     <div class="dialog-head"><h2 id="dialog-title">Liberar estación</h2></div>
     <form id="release-form" class="dialog-body">

@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 
 const appSource = readFileSync(new URL('../client/app.mjs', import.meta.url), 'utf8');
+
+test('el arranque usa únicamente métodos disponibles en la librería QR publicada', () => {
+  assert.match(appSource, /new QrScanner\(/);
+  assert.equal(typeof QrScanner.prototype.start, 'function');
+  for (const [, method] of appSource.matchAll(/\bQrScanner\.([A-Za-z_$][\w$]*)\(/g)) {
+    assert.equal(typeof QrScanner[method], 'function', `QrScanner.${method} no existe en la librería incluida`);
+  }
+});
 
 test('la pantalla de escaneo abre la cámara trasera y lee sin pulsar un segundo botón', () => {
   assert.match(appSource, /<video id="qr-camera"[^>]+autoplay muted playsinline/);

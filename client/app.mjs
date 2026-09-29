@@ -251,7 +251,7 @@ function header() {
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand">${logo}</div><span class="mode-pill">5S semanal</span></div>
+        <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions"><span class="mode-pill">5S semanal</span>${!state.route && appConfig.mode === 'bridge' ? `<a class="admin-link" href="${esc(appConfig.bridgeEndpoint)}" target="_blank" rel="noopener noreferrer">Administración</a>` : ''}</div></div>
         ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
         ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine && state.syncStatus === 'Sincronizado' ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>` : ''}
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
@@ -288,13 +288,13 @@ function scannerPage() {
     <section class="scanner-page page-enter" aria-label="Escáner QR de estaciones">
       <p class="scanner-instruction">Centra el QR dentro del marco</p>
       <div class="scan-stage">
-        <video id="qr-camera" class="camera-video" autoplay muted playsinline poster="./assets/qr-estacion-hero.png" aria-label="Vista de la cámara para escanear el QR"></video>
-        <img class="scan-reticle" src="./assets/icons/scan-eye.svg" alt="" aria-hidden="true">
+        <video id="qr-camera" class="camera-video" autoplay muted playsinline aria-label="Vista de la cámara para escanear el QR"></video>
+        <div class="scan-guides" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div id="camera-error" class="camera-error" role="alert" hidden></div>
         <button id="retry-camera" class="camera-retry" type="button" data-action="retry-camera" hidden>Reintentar cámara</button>
       </div>
       <div class="camera-controls">
-        <button id="flash-toggle" class="flash-toggle" type="button" data-action="toggle-flash" aria-pressed="false" disabled><img src="./assets/icons/bolt.svg" alt=""><span class="flash-label">Linterna</span><span id="flash-state" class="flash-state">Preparando</span></button>
+        <button id="flash-toggle" class="flash-toggle" type="button" data-action="toggle-flash" aria-pressed="false" hidden disabled><img src="./assets/icons/bolt.svg" alt=""><span class="flash-label">Linterna</span></button>
         <span class="camera-status"><i id="camera-status-dot" class="camera-status-dot"></i><span id="camera-status">Iniciando cámara</span></span>
       </div>
       <p id="scan-feedback" class="scan-feedback" aria-live="polite">La lectura comienza automáticamente.</p>
@@ -315,6 +315,7 @@ function setCameraStatus(message, active = false) {
 }
 
 function cameraErrorMessage(error) {
+  if (error?.name === 'NotSupportedError') return 'Este navegador no permite usar la cámara. Abre la web en Safari o Chrome para escanear el QR.';
   if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') return 'Permite el acceso a la cámara en los ajustes del navegador para escanear el QR.';
   if (error?.name === 'NotFoundError' || error?.name === 'DevicesNotFoundError') return 'No se encontró una cámara disponible en este dispositivo.';
   if (error?.name === 'NotReadableError' || error?.name === 'TrackStartError') return 'La cámara está ocupada por otra aplicación. Ciérrala e inténtalo de nuevo.';
@@ -331,9 +332,7 @@ function showCameraError(error) {
   const retry = document.querySelector('#retry-camera');
   if (retry) retry.hidden = false;
   const flash = document.querySelector('#flash-toggle');
-  if (flash) flash.disabled = true;
-  const flashState = document.querySelector('#flash-state');
-  if (flashState) flashState.textContent = 'No disponible';
+  if (flash) { flash.disabled = true; flash.hidden = true; }
   setCameraStatus('Cámara no disponible');
 }
 
@@ -353,44 +352,43 @@ async function startQrScanner() {
   const retry = document.querySelector('#retry-camera');
   if (retry) retry.hidden = true;
   const flash = document.querySelector('#flash-toggle');
-  if (flash) flash.disabled = true;
-  const flashState = document.querySelector('#flash-state');
-  if (flashState) flashState.textContent = 'Preparando';
+  if (flash) { flash.disabled = true; flash.hidden = true; }
   setCameraStatus('Iniciando cámara');
   setScanFeedback('La lectura comienza automáticamente.');
 
-  if (!QrScanner.isSupported()) {
+  if (typeof navigator.mediaDevices?.getUserMedia !== 'function') {
     showCameraError({ name: 'NotSupportedError' });
     return;
   }
 
-  const scanner = new QrScanner(video, handleScannedQr, {
-    preferredCamera: 'environment',
-    maxScansPerSecond: 12,
-    returnDetailedScanResult: true,
-    onDecodeError: () => {},
-  });
-  qrScanner = scanner;
+  let scanner;
   try {
+    scanner = new QrScanner(video, handleScannedQr, {
+      preferredCamera: 'environment',
+      maxScansPerSecond: 12,
+      returnDetailedScanResult: true,
+      onDecodeError: () => {},
+    });
+    qrScanner = scanner;
     await scanner.start();
     if (qrScanner !== scanner || state.screen !== 'scanner') {
       scanner.stop();
       scanner.destroy();
       return;
     }
+    setCameraStatus('Cámara activa', true);
     state.flashAvailable = await scanner.hasFlash().catch(() => false);
     state.flashOn = false;
     if (flash) {
       flash.disabled = !state.flashAvailable;
+      flash.hidden = !state.flashAvailable;
       flash.setAttribute('aria-pressed', 'false');
       flash.classList.remove('is-on');
     }
-    if (flashState) flashState.textContent = state.flashAvailable ? 'Disponible' : 'No disponible';
-    setCameraStatus('Cámara activa', true);
   } catch (error) {
-    if (qrScanner === scanner) {
+    if (!scanner || qrScanner === scanner) {
       qrScanner = null;
-      scanner.destroy();
+      scanner?.destroy();
       showCameraError(error);
     }
   }
