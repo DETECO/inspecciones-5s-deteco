@@ -266,7 +266,7 @@ function header() {
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions"><span class="mode-pill">5S semanal</span>${!state.route && appConfig.mode === 'bridge' ? `<a class="admin-link" href="${esc(appConfig.adminLoginUrl)}" target="_blank" rel="noopener noreferrer">Administración</a>` : ''}</div></div>
+        <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions"><span class="mode-pill">5S semanal</span>${!state.route && appConfig.mode === 'bridge' ? '<a class="admin-link" href="./admin-login.html">Administración</a>' : ''}</div></div>
         ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
         ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine && state.syncStatus === 'Sincronizado' ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>` : ''}
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}

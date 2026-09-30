@@ -6,7 +6,8 @@ Evitar que alguien llegue a una página genérica de error de Google Drive al ab
 
 ## Diseño aprobado
 
-- El enlace Administración abre el selector oficial de cuentas Google y conserva como destino el panel Apps Script de DETECO. El selector debe permitir continuar con una cuenta ya abierta, agregar/iniciar otra cuenta y volver al panel.
+- El enlace Administración abre una pantalla DETECO dedicada en GitHub Pages, inspirada en la referencia aprobada: logo oficial, rótulo Administración 5S, tarjeta de acceso y aviso naranja de cuentas autorizadas. Su botón abre el selector oficial de Google y conserva como destino el panel Apps Script de DETECO.
+- La pantalla de acceso no solicita ni almacena contraseñas. Si la app no tiene configuración válida, deshabilita el botón y explica que se debe contactar al administrador.
 - El panel mantiene la autorización actual del servidor y su lista de administradores. Tener una cuenta `@deteco.cl` no concede acceso automáticamente: la cuenta además debe estar habilitada en el registro administrativo.
 - Si Google Apps Script no reconoce una sesión Workspace DETECO, el panel muestra una explicación con dos acciones: **Iniciar o cambiar cuenta** y **Volver a comprobar acceso**.
 - Si la cuenta activa es externa al dominio corporativo, el aviso explica que no puede acceder y que debe cambiar a una cuenta `@deteco.cl` autorizada.
@@ -16,13 +17,13 @@ Evitar que alguien llegue a una página genérica de error de Google Drive al ab
 ## Opciones consideradas
 
 1. Abrir directamente Apps Script y depender del error predeterminado de Google. No da guía suficiente y puede producir la pantalla de Drive observada.
-2. Mostrar el selector de cuentas como paso previo y presentar mensajes claros dentro del panel. Recomendada y aprobada: mantiene la validación de Google y de la lista existente, sin añadir autenticación propia.
+2. Añadir una pantalla DETECO de acceso antes del selector oficial de Google, conservando mensajes claros dentro del panel. Recomendada y aprobada: mantiene la validación de Google y de la lista existente, sin añadir autenticación propia.
 3. Crear autenticación independiente para el panel. Se descarta por complejidad y por duplicar los controles de acceso existentes.
 
 ## Flujo y errores
 
-1. El usuario pulsa Administración.
-2. Google solicita elegir, agregar o iniciar una cuenta y continúa al panel.
+1. El usuario pulsa Administración y ve la pantalla DETECO de acceso.
+2. Al pulsar Continuar con Google, puede elegir, agregar o iniciar una cuenta y continuar al panel.
 3. El panel consulta el correo de sesión y valida dominio y permisos registrados.
 4. Si falla, muestra un estado legible y acciones para cambiar la cuenta o reintentar, conservando intactos los controles del servidor.
 
@@ -37,6 +38,7 @@ Mensaje para cuenta DETECO no habilitada:
 ## Seguridad y alcance
 
 - Nunca se conceden permisos desde el selector ni desde la interfaz; el servidor sigue verificando el correo de sesión y la tabla de administradores en cada operación.
+- La pantalla pública de acceso solo dirige al flujo de autenticación de Google; la autorización real permanece en Apps Script.
 - El panel no revela ni cambia credenciales, configuración de Drive o permisos del Sheet.
 - No se modifican el escáner, los QR, las inspecciones ni el flujo de los inspectores.
 
@@ -45,4 +47,4 @@ Mensaje para cuenta DETECO no habilitada:
 - Probar selector con sesión iniciada, sin sesión y con más de una cuenta.
 - Probar en el panel: administrador habilitado, cuenta DETECO no habilitada y sesión ausente/externa.
 - Confirmar que las cuentas no autorizadas no pueden consultar estaciones, Kaizen, fotos ni ejecutar acciones administrativas.
-- Verificar el comportamiento en navegador móvil y escritorio, y publicar solo luego de pasar las pruebas automatizadas.
+- Verificar el comportamiento y ajuste visual en navegador móvil y escritorio, y publicar solo luego de pasar las pruebas automatizadas.

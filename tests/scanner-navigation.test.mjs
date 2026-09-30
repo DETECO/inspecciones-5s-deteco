@@ -25,10 +25,11 @@ test('al reconocer un QR guarda la ruta y muestra la identificación de la estac
   );
 });
 
-test('el enlace Administración solicita elegir cuenta y deja el puente para sincronizar', () => {
+test('el enlace Administración abre la pantalla DETECO de inicio de sesión', () => {
   const header = appSource.match(/function header\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 
-  assert.match(header, /href="\$\{esc\(appConfig\.adminLoginUrl\)\}"/);
+  assert.match(header, /href="\.\/admin-login\.html"/);
+  assert.doesNotMatch(header, /adminLoginUrl/);
   assert.doesNotMatch(header, /admin-link[^\n]*appConfig\.bridgeEndpoint/);
 });
 
