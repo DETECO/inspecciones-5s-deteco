@@ -20,16 +20,30 @@ test('declares home-screen metadata and platform-sized DETECO icons', () => {
 test('uses the DETECO landing page with a direct camera-scanner action', () => {
   assert.match(appSource, /class="brand-logo" src="\.\/assets\/deteco-wordmark\.jpg"/);
   assert.match(appSource, /class="welcome-page page-enter"/);
-  assert.match(appSource, /Escanea el QR para iniciar\./);
+  assert.match(appSource, /Escanea el QR del área para comenzar\./);
   assert.match(appSource, /data-action="open-scanner"[\s\S]*?Escanear QR/);
   assert.match(appSource, /data-action="show-scan-help"[\s\S]*?Ver instrucciones/);
-  assert.match(appSource, /qr-estacion-hero\.png/);
+  assert.match(appSource, /station-carousel/);
 });
 
-test('preserves the weekly badge and mobile proportions from the approved home design', () => {
+test('presenta las seis áreas aprobadas sin permitir elegir estación fuera del QR', () => {
+  const home = appSource.match(/function qrPage\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(appSource, /HOME_CAROUSEL_STATIONS/);
+  assert.match(home, /data-action="previous-station"/);
+  assert.match(home, /data-action="next-station"/);
+  assert.match(home, /data-station-index=/);
+  assert.match(home, /getStationPresentation\(/);
+  assert.match(home, /type="button" data-action="open-scanner"/);
+  assert.doesNotMatch(home, /data-action="select-station"|data-station-id=/);
+});
+
+test('mantiene insignia semanal, ayuda, administración y proporciones móviles accesibles', () => {
+  const header = appSource.match(/function header\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   assert.match(stylesSource, /\.mode-pill\s*\{\s*display:\s*inline-flex/);
-  assert.match(stylesSource, /\.welcome-visual img\s*\{\s*height:\s*min\(53svh,\s*550px\)/);
-  assert.match(stylesSource, /\.welcome-panel\s*\{[^}]*margin-top:\s*-14px/);
+  assert.match(header, /aria-label="Administración"/);
+  assert.match(stylesSource, /\.station-carousel/);
+  assert.match(stylesSource, /prefers-reduced-motion:\s*reduce/);
+  assert.match(stylesSource, /\.station-slide[\s\S]*?focus-visible/);
 });
 
 test('ships the wordmark, QR illustration, and correctly sized home-screen icons', () => {

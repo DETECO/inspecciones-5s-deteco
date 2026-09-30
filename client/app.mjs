@@ -18,6 +18,7 @@ import {
   closeInspection,
 } from '../domain/inspection.mjs';
 import { parseQrRoute, scrubQrFragment } from './route.mjs';
+import { HOME_CAROUSEL_STATIONS, getStationPresentation } from './station-presentation.mjs';
 
 const appElement = document.querySelector('#app');
 const sessionKey = 'deteco-5s.active-qr';
@@ -53,6 +54,8 @@ let qrScanner = null;
 let scannerNavigationPending = false;
 let lastInvalidQr = '';
 let lastInvalidQrAt = 0;
+let homeCarouselIndex = 0;
+let carouselTouchStartX = null;
 
 if (!localStorage.getItem(clientKey)) localStorage.setItem(clientKey, state.clientId);
 
@@ -112,7 +115,15 @@ async function queueBridgeOperation(operation, payload) {
 }
 
 async function initializeApp() {
-  activateRoute();
+  const openedFromQrUrl = activateRoute();
+  if (openedFromQrUrl) {
+    render();
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    window.setTimeout(() => {
+      if (state.screen === 'station-opening') initializeApp();
+    }, reduceMotion ? 160 : 980);
+    return;
+  }
   render();
   if (!state.route) return;
 
@@ -201,17 +212,20 @@ async function draftLoad() {
 
 function activateRoute() {
   let route = null;
+  let fromQrUrl = false;
   try {
     route = parseQrRoute(window.location.href);
+    fromQrUrl = true;
     sessionStorage.setItem(sessionKey, JSON.stringify(route));
     history.replaceState({}, document.title, scrubQrFragment(window.location.href));
   } catch {
     route = storageReadFromSession(sessionKey);
   }
-  if (!route) return;
+  if (!route) return false;
   state.route = route;
-  state.screen = 'identity';
+  state.screen = fromQrUrl ? 'station-opening' : 'identity';
   state.station = STATIONS.find(item => item.id === route.stationId) || { id: route.stationId, name: route.stationId.toUpperCase() };
+  return fromQrUrl;
 }
 
 function storageReadFromSession(key) {
@@ -261,12 +275,18 @@ function header() {
         <h1>Escanear estación</h1>
       </header>`;
   }
+  if (state.screen === 'station-opening') {
+    return `
+      <header class="header scanner-header station-opening-header">
+        <div class="scanner-header-inner"><span aria-hidden="true"></span>${logo}<span aria-hidden="true"></span></div>
+      </header>`;
+  }
   const title = state.route ? stationName() : 'INSPECCIÓN 5S';
   const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${QUESTIONS.length} respuestas` : 'Acceso por QR';
   return `
     <header class="header">
       <div class="header-inner">
-        <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions"><span class="mode-pill">5S semanal</span>${!state.route && appConfig.mode === 'bridge' ? '<a class="admin-link" href="./admin-login.html">Administración</a>' : ''}</div></div>
+        <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions"><span class="mode-pill">5S semanal</span>${!state.route && appConfig.mode === 'bridge' ? '<a class="admin-link" href="./admin-login.html" aria-label="Administración" title="Panel de administración"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.2 13.8 1.2.9-1.5 2.6-1.5-.5a7.8 7.8 0 0 1-1.5.9l-.3 1.6h-3l-.3-1.6a7.8 7.8 0 0 1-1.5-.9l-1.5.5-1.5-2.6 1.2-.9a7.4 7.4 0 0 1 0-1.8l-1.2-.9 1.5-2.6 1.5.5a7.8 7.8 0 0 1 1.5-.9l.3-1.6h3l.3 1.6a7.8 7.8 0 0 1 1.5.9l1.5-.5 1.5 2.6-1.2.9a7.4 7.4 0 0 1 0 1.8Z"/></svg><span>Administración</span></a>' : ''}</div></div>
         ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
         ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine && state.syncStatus === 'Sincronizado' ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>` : ''}
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
@@ -279,22 +299,101 @@ function errorNotice() {
   return `<div class="notice danger"><span class="notice-icon">!</span><span>${esc(state.error)}</span></div>`;
 }
 
-function qrPage() {
+function stationArtwork(presentation) {
+  const label = `Ilustración del uniforme de ${presentation.name}: ${presentation.uniformLabel.toLocaleLowerCase()}`;
   return `
-    <section class="welcome-page page-enter">
-      <figure class="welcome-visual"><img src="./assets/qr-estacion-hero.png" alt="Un inspector escanea el código QR de una estación DETECO en la planta"></figure>
+    <svg class="station-artwork" viewBox="0 0 560 300" role="img" aria-label="${esc(label)}" style="--station-shirt:${presentation.shirtColor};--station-helmet:${presentation.helmetColor}">
+      <rect width="560" height="300" fill="#eeede9"/>
+      <path d="M0 212h560M48 48h458M93 48v164m370-164v164M48 75l45 32m413-32-43 32M110 108h335M110 145h335M110 182h335" fill="none" stroke="#c9c7c1" stroke-width="5"/>
+      <path d="M0 242h560" stroke="#b5b2aa" stroke-width="4"/>
+      <path d="M30 241v-57h46v57m427 0v-76h34v76" fill="#d5d2cb"/>
+      <path d="M55 239h117m218 0h145" stroke="#f26522" stroke-width="8"/>
+      <path d="M371 151c0-24 13-42 36-42s37 18 37 42v26h-73Z" fill="#c99573"/>
+      <path d="M435 151c8 0 12 6 9 13l-8 12h-8" fill="#c99573" stroke="#93674d" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M400 158c4 2 8 2 12 0" fill="none" stroke="#76533f" stroke-width="2" stroke-linecap="round"/>
+      <path d="M357 133c5-33 23-49 53-49s48 16 53 49h-18c-2-20-14-31-35-31s-33 11-35 31Z" fill="var(--station-helmet)" stroke="#5f5c56" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M349 131h122v11H349z" fill="var(--station-helmet)" stroke="#5f5c56" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M374 172h70c18 0 34 12 39 30l20 64H330l14-64c4-18 14-30 30-30Z" fill="var(--station-shirt)"/>
+      <path d="m378 177 35 27 35-27m-35 28v61m-38-48-26 20m112-20 24 20" fill="none" stroke="#ffffff" stroke-opacity=".76" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M393 205h16v19h-16z" fill="#ffffff" fill-opacity=".82"/>
+      <path d="M413 206h16v19h-16z" fill="#242321" fill-opacity=".19"/>
+      <path d="M348 247h117" stroke="#33312d" stroke-opacity=".34" stroke-width="4"/>
+      <path d="M402 109c4-19 17-30 35-32" fill="none" stroke="#ffffff" stroke-opacity=".78" stroke-width="4" stroke-linecap="round"/>
+    </svg>`;
+}
+
+function qrPage() {
+  const slides = HOME_CAROUSEL_STATIONS.map((stationId, index) => {
+    const presentation = getStationPresentation(stationId);
+    const isCurrent = index === homeCarouselIndex;
+    return `
+      <article class="station-slide" role="group" aria-roledescription="diapositiva" aria-label="${index + 1} de ${HOME_CAROUSEL_STATIONS.length}: ${esc(presentation.name)}" aria-hidden="${!isCurrent}">
+        <div class="station-slide-art">${stationArtwork(presentation)}</div>
+        <div class="station-slide-copy"><span class="station-slide-kicker">Uniforme de planta</span><h2>${esc(presentation.name)}</h2><p>${esc(presentation.uniformLabel)}</p></div>
+      </article>`;
+  }).join('');
+  const currentPresentation = getStationPresentation(HOME_CAROUSEL_STATIONS[homeCarouselIndex]);
+  const dots = HOME_CAROUSEL_STATIONS.map((stationId, index) => {
+    const presentation = getStationPresentation(stationId);
+    return `<button class="station-dot" type="button" data-action="set-station-slide" data-station-index="${index}" aria-label="Mostrar ${esc(presentation.name)}" aria-pressed="${index === homeCarouselIndex}"></button>`;
+  }).join('');
+
+  return `
+    <section class="welcome-page page-enter" aria-label="Inicio de la inspección semanal 5S">
+      <section class="station-carousel" id="station-carousel" aria-label="Uniformes de las estaciones de planta">
+        <div class="station-carousel-viewport">
+          <div class="station-carousel-track" style="width:${HOME_CAROUSEL_STATIONS.length * 100}%;transform:translateX(-${homeCarouselIndex * 100 / HOME_CAROUSEL_STATIONS.length}%)">${slides}</div>
+        </div>
+        <div class="station-carousel-controls">
+          <button class="station-arrow" type="button" data-action="previous-station" aria-label="Ver área anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+          <div class="station-dots" role="group" aria-label="Láminas de uniformes">${dots}</div>
+          <button class="station-arrow" type="button" data-action="next-station" aria-label="Ver área siguiente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        </div>
+        <p class="station-carousel-status" id="station-carousel-status" aria-live="polite">${esc(currentPresentation.name)} · ${esc(currentPresentation.uniformLabel)}</p>
+      </section>
       <section class="welcome-panel" aria-labelledby="welcome-title">
         <span class="welcome-accent" aria-hidden="true"></span>
+        <span class="eyebrow">Inspección semanal</span>
         <h1 id="welcome-title">Inspección 5S</h1>
-        <p class="lead">Escanea el QR para iniciar.</p>
+        <p class="lead">Escanea el QR del área para comenzar.</p>
         <button class="primary scan-cta" type="button" data-action="open-scanner"><img src="./assets/icons/scan.svg" alt=""><span>Escanear QR</span></button>
         <button class="help-link" type="button" data-action="show-scan-help"><img src="./assets/icons/info-circle.svg" alt=""><span>¿Necesitas ayuda? Ver instrucciones</span></button>
-        <div class="scan-note"><img src="./assets/icons/qrcode.svg" alt=""><span>La estación se reconoce con el QR.</span></div>
+        <div class="scan-note"><img src="./assets/icons/qrcode.svg" alt=""><span>El QR reconoce tu estación automáticamente.</span></div>
       </section>
       <dialog class="help-dialog" id="scan-help-dialog" aria-labelledby="scan-help-title">
         <div class="help-dialog-head"><img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO"><button class="help-close" type="button" data-action="close-scan-help" aria-label="Cerrar"><img src="./assets/icons/x.svg" alt=""></button></div>
         <div class="help-dialog-body"><h2 id="scan-help-title">Cómo iniciar</h2><ol><li>Toca <strong>Escanear QR</strong> y permite el acceso a la cámara.</li><li>Centra el código del tablero dentro del marco.</li><li>La estación se abrirá automáticamente para identificarte.</li></ol><button class="primary" type="button" data-action="close-scan-help">Entendido</button></div>
       </dialog>
+    </section>`;
+}
+
+function updateHomeCarousel(index) {
+  const count = HOME_CAROUSEL_STATIONS.length;
+  homeCarouselIndex = ((index % count) + count) % count;
+  const carousel = document.querySelector('#station-carousel');
+  if (!carousel) return;
+  const track = carousel.querySelector('.station-carousel-track');
+  if (track) track.style.transform = `translateX(-${homeCarouselIndex * 100 / count}%)`;
+  carousel.querySelectorAll('.station-slide').forEach((slide, slideIndex) => {
+    slide.setAttribute('aria-hidden', String(slideIndex !== homeCarouselIndex));
+  });
+  carousel.querySelectorAll('.station-dot').forEach((dot, dotIndex) => {
+    dot.setAttribute('aria-pressed', String(dotIndex === homeCarouselIndex));
+  });
+  const presentation = getStationPresentation(HOME_CAROUSEL_STATIONS[homeCarouselIndex]);
+  const status = carousel.querySelector('#station-carousel-status');
+  if (status) status.textContent = `${presentation.name} · ${presentation.uniformLabel}`;
+}
+
+function stationOpeningPage() {
+  return `
+    <section class="station-opening page-enter" role="status" aria-live="assertive" aria-label="Estación reconocida: ${esc(stationName())}">
+      <div class="station-opening-card">
+        <span class="station-loader-arc" aria-hidden="true"></span>
+        <span class="eyebrow">Estación reconocida</span>
+        <h1>${esc(stationName())}</h1>
+        <p>Abriendo tu inspección 5S…</p>
+      </div>
     </section>`;
 }
 
@@ -429,14 +528,17 @@ async function handleScannedQr(result) {
   sessionStorage.setItem(sessionKey, JSON.stringify(route));
   state.route = route;
   state.station = STATIONS.find(item => item.id === route.stationId) || { id: route.stationId, name: route.stationId.toUpperCase() };
-  state.screen = 'identity';
+  state.screen = 'station-opening';
   state.scanError = '';
   state.qrAccessValidated = false;
-  state.scanNotice = `QR leído: ${state.station.name}. Ingresa tu nombre para continuar.`;
+  state.scanNotice = `QR leído: ${state.station.name}. Abriendo la inspección…`;
   state.qrValidationPending = false;
   disposeQrScanner();
   render();
-  await initializeApp();
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  window.setTimeout(() => {
+    if (state.screen === 'station-opening') initializeApp();
+  }, reduceMotion ? 160 : 980);
 }
 
 function openScanner() {
@@ -644,6 +746,7 @@ function render() {
   if (preserveInspectorFocus) state.inspectorName = activeElement.value;
   let content;
   if (state.screen === 'scanner') content = scannerPage();
+  else if (state.screen === 'station-opening') content = stationOpeningPage();
   else if (!state.route) content = qrPage();
   else if (state.screen === 'identity') content = identityPage();
   else if (state.screen === 'kaizen') content = kaizenPage();
@@ -991,6 +1094,9 @@ appElement.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
+  if (action === 'previous-station') updateHomeCarousel(homeCarouselIndex - 1);
+  if (action === 'next-station') updateHomeCarousel(homeCarouselIndex + 1);
+  if (action === 'set-station-slide') updateHomeCarousel(Number(target.dataset.stationIndex));
   if (action === 'open-scanner') openScanner();
   if (action === 'rescan-qr') openScanner();
   if (action === 'close-scanner') closeScanner();
@@ -1011,6 +1117,21 @@ appElement.addEventListener('click', event => {
   if (action === 'kaizen-decision') setKaizenDecision(target);
   if (action === 'continue-kaizen') continueKaizen();
 });
+
+appElement.addEventListener('touchstart', event => {
+  if (!event.target.closest('.station-carousel-viewport')) return;
+  carouselTouchStartX = event.changedTouches[0]?.clientX ?? null;
+}, { passive: true });
+
+appElement.addEventListener('touchend', event => {
+  if (carouselTouchStartX === null) return;
+  const endX = event.changedTouches[0]?.clientX ?? carouselTouchStartX;
+  const delta = endX - carouselTouchStartX;
+  carouselTouchStartX = null;
+  if (Math.abs(delta) >= 48) updateHomeCarousel(homeCarouselIndex + (delta < 0 ? 1 : -1));
+}, { passive: true });
+
+appElement.addEventListener('touchcancel', () => { carouselTouchStartX = null; }, { passive: true });
 
 appElement.addEventListener('change', event => {
   const target = event.target;

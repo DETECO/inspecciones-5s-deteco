@@ -15,14 +15,36 @@ test('al reconocer un QR guarda la ruta y muestra la identificación de la estac
     'la ruta reconocida debe quedar guardada antes de depender de la navegación',
   );
   assert.match(scannedQrHandler, /state\.route\s*=/, 'la ruta reconocida debe activar el estado de la app');
-  assert.match(scannedQrHandler, /state\.screen\s*=\s*['"]identity['"]/, 'la app debe pasar a identificación');
+  assert.match(scannedQrHandler, /state\.screen\s*=\s*['"]station-opening['"]/, 'la app debe mostrar la transición de estación');
   assert.match(scannedQrHandler, /state\.station\s*=/, 'la estación reconocida debe quedar disponible para mostrar su nombre');
   assert.match(scannedQrHandler, /render\(\)/, 'la identificación debe renderizarse tras reconocer el QR');
+  assert.match(scannedQrHandler, /setTimeout\([\s\S]*?initializeApp\(\)/, 'la identificación debe abrirse después de la transición breve');
   assert.doesNotMatch(
     scannedQrHandler,
     /setScanFeedback\(['"]Estación reconocida\. Abriendo inspección…['"]\)[\s\S]*window\.location\.assign\(/,
     'no debe quedar bloqueada en el mensaje de apertura esperando una navegación completa',
   );
+});
+
+test('la transición del QR muestra el nombre de la estación y el arco de carga aprobado', () => {
+  const openingPage = appSource.match(/function stationOpeningPage\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const render = appSource.match(/function render\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.notEqual(openingPage, '', 'falta la pantalla animada posterior al QR');
+  assert.match(openingPage, /station-loader-arc/);
+  assert.match(openingPage, /stationName\(\)/);
+  assert.match(render, /state\.screen\s*===\s*['"]station-opening['"]\s*\)\s*content\s*=\s*stationOpeningPage\(\)/);
+  assert.match(appSource, /prefers-reduced-motion/);
+});
+
+test('un QR abierto desde la cámara del teléfono también muestra la transición de estación', () => {
+  const initializer = appSource.match(/async function initializeApp\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const routeActivator = appSource.match(/function activateRoute\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(routeActivator, /return\s+(?:openedFromQrUrl|fromQrUrl|routeFromUrl)/,
+    'la carga debe distinguir un QR recién abierto desde su URL de un avance recuperado');
+  assert.match(initializer, /(?:openedFromQrUrl|fromQrUrl|routeFromUrl)\s*=\s*activateRoute\(\)/,
+    'la carga inicial debe detectar un enlace QR directo');
+  assert.match(initializer, /if\s*\(openedFromQrUrl\)[\s\S]*?render\(\)[\s\S]*?setTimeout\([\s\S]*?station-opening[\s\S]*?initializeApp\(\)/,
+    'un enlace QR directo debe mostrar la misma transición breve antes de identificación');
 });
 
 test('el enlace Administración abre la pantalla DETECO de inicio de sesión', () => {
