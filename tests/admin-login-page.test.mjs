@@ -22,6 +22,8 @@ test('la pantalla de acceso usa la marca DETECO y dirige a Google para autentica
 });
 
 test('la pantalla se adapta a móvil y respeta la preferencia de movimiento reducido', () => {
+  assert.match(stylesheet, /html\s*\{[^}]*min-width:\s*0/s,
+    'la pantalla de acceso no debe forzar desplazamiento horizontal en un visor estrecho');
   assert.match(stylesheet, /\.admin-login-page\s*\{[^}]*display:\s*flex/s,
     'el contenido debe conservar el inicio del documento en pantallas bajas');
   assert.match(stylesheet, /\.admin-login-content\s*\{[^}]*margin:\s*auto/s,
