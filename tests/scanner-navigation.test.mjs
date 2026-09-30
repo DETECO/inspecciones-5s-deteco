@@ -25,6 +25,13 @@ test('al reconocer un QR guarda la ruta y muestra la identificación de la estac
   );
 });
 
+test('el enlace Administración usa la dirección Workspace y deja el puente para sincronizar', () => {
+  const header = appSource.match(/function header\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.match(header, /href="\$\{esc\(appConfig\.adminEndpoint\)\}"/);
+  assert.doesNotMatch(header, /admin-link[^\n]*appConfig\.bridgeEndpoint/);
+});
+
 test('el acceso local no deja el botón de inicio bloqueado tras leer el QR', () => {
   const initializer = appSource.match(/async function initializeApp\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   assert.match(initializer, /\} else \{[\s\S]*?qrValidationPending\s*=\s*false;[\s\S]*?qrAccessValidated\s*=\s*true;/,
