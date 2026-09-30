@@ -4,11 +4,12 @@ import { validateInspection } from '../domain/scoring.mjs';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
 import { createIndexedDraftStore } from './draft-store.mjs';
-import { createBridgeSession } from './bridge-session.mjs';
+import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
 import { createFormBridge } from '../transport/form-client.mjs';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
-import { mergeServerState } from './state-merge.mjs';
+import { mergeServerState } from './state-merge.mjs?v=20260930-answers-photos';
+import { readImageForUpload } from './image-upload.mjs';
 import {
   createInspection,
   reserveInspection,
@@ -46,6 +47,8 @@ const state = {
   qrAccessValidated: false,
   flashAvailable: false,
   flashOn: false,
+  closing: false,
+  photoUploads: 0,
   clientId: localStorage.getItem(clientKey) || crypto.randomUUID(),
 };
 
@@ -101,14 +104,19 @@ async function flushBridgeQueue() {
   render();
 }
 
-async function queueBridgeOperation(operation, payload) {
+async function queueBridgeOperations(operations) {
   const session = ensureBridgeSession();
   if (!session) return;
-  session.enqueue(operation, payload);
+  for (const { operation, payload } of operations) session.enqueue(operation, payload);
   state.syncQueue = session.pending();
   state.syncStatus = navigator.onLine ? 'Pendiente de envío' : 'Sin conexión';
+  render();
   await draftSave();
   if (navigator.onLine) await flushBridgeQueue();
+}
+
+function queueBridgeOperation(operation, payload) {
+  return queueBridgeOperations([{ operation, payload }]);
 }
 
 async function initializeApp() {
@@ -185,7 +193,7 @@ async function draftSave() {
     previousWeekAlert: state.previousWeekAlert,
   };
   await draftStore.save(draftKey(), record);
-  state.syncQueue = record.syncQueue;
+  state.syncQueue = state.bridgeSession?.pending() || record.syncQueue;
 }
 
 function persistDraftQuietly() {
@@ -591,6 +599,7 @@ function modulePage() {
       <h1>${esc(module.title)}</h1>
       <p class="lead">Selecciona de 0 a 5 hallazgos. Cada hallazgo necesita una fotografía; la nota descriptiva es opcional.</p>
       ${tabs()}${errorNotice()}
+      ${state.photoUploads ? '<p class="hint" role="status">Preparando y guardando fotografía…</p>' : ''}
       <div>${module.questions.map((question, index) => questionCard(question, index)).join('')}</div>
     </section>
     ${footer(moduleFooter())}`;
@@ -609,7 +618,7 @@ function findingArea(questionId, count, items) {
   return `<div class="finding-area"><div class="finding-title"><span>Fotos requeridas</span><span>${items.filter(item => item?.photoId).length} de ${count}</span></div>${Array.from({ length: count }, (_, index) => {
     const ordinal = index + 1;
     const item = items[index] || {};
-    return `<div class="finding"><div class="finding-top"><span class="finding-index">${ordinal}</span><span class="finding-status">${item.photoId ? 'Foto lista para sincronizar' : 'Falta fotografía'}</span></div>
+    return `<div class="finding"><div class="finding-top"><span class="finding-index">${ordinal}</span><span class="finding-status">${item.photoId ? item.photoId.startsWith('local-') ? 'Foto pendiente de envío' : 'Foto guardada' : 'Falta fotografía'}</span></div>
       <label class="camera-input">Tomar o elegir foto<input type="file" accept="image/*" capture="environment" data-action="finding-photo" data-question="${questionId}" data-ordinal="${ordinal}"></label>
       ${item.preview ? `<img class="photo-preview" src="${esc(item.preview)}" alt="Hallazgo ${ordinal}">` : ''}
       <textarea class="textarea" data-action="finding-note" data-question="${questionId}" data-ordinal="${ordinal}" placeholder="Nota del hallazgo (opcional)">${esc(item.note || '')}</textarea>
@@ -637,7 +646,8 @@ function reviewPage() {
       ${checks.map(([label, complete]) => `<div class="check"><span class="check-mark ${complete ? 'done' : ''}">${complete ? '✓' : ''}</span><span>${label}</span></div>`).join('')}
       ${!ready ? `<div class="notice"><span class="notice-icon">!</span><span>Completa los elementos pendientes antes de cerrar. No se mostrará una nota parcial.</span></div>` : `<div class="notice good"><span class="notice-icon">✓</span><span>La inspección está completa y puede cerrarse.</span></div>`}${errorNotice()}
     </section>
-    ${footer(`<div class="button-row"><button class="secondary" data-action="back-to-module">Volver a preguntas</button><button class="primary" data-action="close" ${ready ? '' : 'disabled'}>Cerrar inspección</button></div>`)}`;
+    ${state.photoUploads ? '<p class="hint" role="status">Preparando y guardando fotografía…</p>' : ''}
+    ${footer(`<div class="button-row"><button class="secondary" data-action="back-to-module" ${state.closing ? 'disabled' : ''}>Volver a preguntas</button><button class="primary" data-action="close" ${ready && !state.closing && !state.photoUploads ? '' : 'disabled'}>${state.closing ? 'Guardando y cerrando…' : 'Cerrar inspección'}</button></div>`)}`;
 }
 
 function summaryPage() {
@@ -810,10 +820,14 @@ async function approveTakeover() {
 
 async function refreshServerState() {
   if (appConfig.mode !== 'bridge' || !state.route || !state.qrAccessValidated || !navigator.onLine || document.hidden) return;
+  if (state.closing || state.photoUploads || state.screen === 'kaizen') return;
   const session = ensureBridgeSession();
   if (session.pending().length) return;
+  const revision = session.revision();
   try {
     const receipt = await session.readState();
+    // A read started before a new answer must not replace the newer confirmed state.
+    if (revision !== session.revision() || state.closing || state.photoUploads) return;
     state.inspection = mergeServerState(receipt.state, state.inspection || {}, state.bridgeSession?.pending() || []);
     if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
     if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
@@ -822,7 +836,7 @@ async function refreshServerState() {
     if (state.inspection.status === 'closed' || state.inspection.status === 'expired') {
       state.screen = 'summary';
     } else if (state.inspection.editor?.clientId === state.clientId && state.inspection.startedAt) {
-      state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
+      if (state.screen === 'identity') state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
       state.inspectorName ||= state.inspection.editor.inspectorName || '';
     } else if (state.inspection.editor?.clientId !== state.clientId && state.screen !== 'qr') {
       state.screen = 'identity';
@@ -835,16 +849,18 @@ async function refreshServerState() {
 }
 
 async function changeAnswer(questionId, count) {
+  if (state.closing) return;
   const previousItems = state.inspection.findings[questionId] || [];
   if (count < previousItems.length && !window.confirm('Hay fotos asociadas que sobran. ¿Confirmas quitarlas de este borrador?')) return;
   try {
     state.error = '';
     state.inspection = saveAnswer(state.inspection, { clientId: state.clientId, questionId, count });
-    await queueBridgeOperation('save-answer', { questionId, count });
+    const operations = [{ operation: 'save-answer', payload: { questionId, count } }];
     if (count < previousItems.length) {
       state.inspection = discardExtraFindings(state.inspection, { clientId: state.clientId, questionId });
-      await queueBridgeOperation('discard-extra-findings', { questionId });
+      operations.push({ operation: 'discard-extra-findings', payload: { questionId } });
     }
+    await queueBridgeOperations(operations);
     await draftSave();
   } catch (error) {
     state.error = error.message;
@@ -853,22 +869,19 @@ async function changeAnswer(questionId, count) {
 }
 
 async function readImage(file) {
-  if (!file?.type.startsWith('image/')) throw new Error('El archivo debe ser una imagen.');
-  if (file.size > 1500000) throw new Error('La foto supera 1,5 MB. Toma una imagen de menor tamaño.');
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('No se pudo leer la foto.'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(file);
-  });
+  return readImageForUpload(file);
 }
 
 async function addFindingPhoto(target) {
+  const file = target.files?.[0];
+  if (!file || state.closing) return;
+  state.photoUploads += 1;
+  render();
   try {
     state.error = '';
     const questionId = target.dataset.question;
     const ordinal = Number(target.dataset.ordinal);
-    const preview = await readImage(target.files?.[0]);
+    const preview = await readImage(file);
     const existing = state.inspection.findings[questionId]?.[ordinal - 1] || {};
     state.inspection = saveFinding(state.inspection, {
       clientId: state.clientId,
@@ -884,6 +897,8 @@ async function addFindingPhoto(target) {
     await draftSave();
   } catch (error) {
     state.error = error.message;
+  } finally {
+    state.photoUploads -= 1;
   }
   render();
 }
@@ -931,8 +946,12 @@ function setKaizenReason(target) {
 }
 
 async function addKaizenPhoto(target) {
+  const file = target.files?.[0];
+  if (!file || state.closing) return;
+  state.photoUploads += 1;
+  render();
   try {
-    const preview = await readImage(target.files?.[0]);
+    const preview = await readImage(file);
     const id = target.dataset.kaizen;
     const review = state.inspection.kaizenReviews[id] || { decision: 'solved' };
     state.inspection = { ...state.inspection, kaizenReviews: { ...state.inspection.kaizenReviews, [id]: { ...review, photoId: `local-${crypto.randomUUID()}`, preview, dataUri: preview } } };
@@ -940,6 +959,8 @@ async function addKaizenPhoto(target) {
     persistDraftQuietly();
   } catch (error) {
     state.error = error.message;
+  } finally {
+    state.photoUploads -= 1;
   }
   render();
 }
@@ -953,16 +974,17 @@ async function continueKaizen() {
   }
   try {
     if (appConfig.mode === 'bridge') {
-      for (const item of state.inspection.pendingKaizen) {
+      const operations = state.inspection.pendingKaizen.map(item => {
         const review = state.inspection.kaizenReviews[item.id];
-        await queueBridgeOperation('review-kaizen', {
+        return { operation: 'review-kaizen', payload: {
           kaizenId: item.id,
           review: {
             ...review,
             dataUri: review.decision === 'solved' ? review.dataUri || review.preview : undefined,
           },
-        });
-      }
+        } };
+      });
+      await queueBridgeOperations(operations);
     }
   } catch (error) {
     state.error = error.message;
@@ -976,21 +998,31 @@ async function continueKaizen() {
 }
 
 async function close() {
+  if (state.closing) return;
+  if (state.photoUploads) {
+    state.error = 'Espera a que termine de prepararse y guardarse la fotografía antes de cerrar.';
+    render();
+    return;
+  }
+  const completedAt = new Date().toISOString();
+  state.closing = true;
+  render();
   try {
     if (currentWindow() === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
     if (appConfig.mode === 'bridge') {
-      const localClose = closeInspection(state.inspection, { clientId: state.clientId, at: new Date().toISOString(), completionStatus: completionStatus() });
+      const localClose = closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
       if (navigator.onLine) {
         await flushBridgeQueue();
         if (ensureBridgeSession().pending().length) throw new Error('Hay cambios sin sincronizar. Espera la confirmación antes de cerrar.');
-        const receipt = await ensureBridgeSession().sendNow('close', {});
+        closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
+        const receipt = await ensureBridgeSession().sendNow('close', { occurredAt: completedAt });
         state.inspection = mergeServerState(receipt.state, state.inspection);
         state.syncStatus = 'Sincronizado';
       } else {
         state.inspection = localClose;
         state.syncStatus = 'Pendiente de envío';
         state.screen = 'summary';
-        await queueBridgeOperation('close', {});
+        await queueBridgeOperation('close', { occurredAt: completedAt });
       }
       state.screen = 'summary';
     } else {
@@ -1018,6 +1050,8 @@ async function close() {
       }
     }
     state.error = error.message;
+  } finally {
+    state.closing = false;
   }
   render();
 }
@@ -1026,6 +1060,7 @@ appElement.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
+  if (state.closing) return;
   if (action === 'open-scanner') openScanner();
   if (action === 'rescan-qr') openScanner();
   if (action === 'close-scanner') closeScanner();

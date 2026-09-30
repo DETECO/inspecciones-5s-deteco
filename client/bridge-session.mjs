@@ -18,6 +18,7 @@ export function createBridgeSession({ bridge, stationId, accessToken, clientId, 
 
   let outbox = [];
   let flushing = null;
+  let revision = 0;
 
   function request(operation, payload = {}, requestId) {
     const requestPayload = operation === 'state'
@@ -35,11 +36,15 @@ export function createBridgeSession({ bridge, stationId, accessToken, clientId, 
     pending() {
       return pendingOutbox(outbox);
     },
+    revision() {
+      return revision;
+    },
     restore(items = []) {
       outbox = pendingOutbox(items);
       return pendingOutbox(outbox);
     },
     enqueue(operation, payload) {
+      revision += 1;
       outbox = appendOutbox(outbox, {
         id: operationId(),
         operation,
@@ -51,6 +56,7 @@ export function createBridgeSession({ bridge, stationId, accessToken, clientId, 
       return request('state');
     },
     sendNow(operation, payload, requestId) {
+      if (operation !== 'state') revision += 1;
       return request(operation, payload, requestId);
     },
     async flush({ onReceipt } = {}) {

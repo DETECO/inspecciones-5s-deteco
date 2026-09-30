@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Prueba de fotos · DETECO 5S</title>
+<style>body{font:18px system-ui;margin:40px;max-width:900px;color:#494741}button{background:#f26522;color:white;padding:16px;border:0;border-radius:10px;font:inherit}pre{white-space:pre-wrap}img{max-width:400px}</style>
+<h1>Prueba local de compresión de fotografías</h1>
+<p>Utiliza imágenes sintéticas. No envía datos a Google Sheets ni Drive.</p>
+<button id="run">Probar fotos grandes</button>
+<pre id="result">Pendiente</pre>
+<img id="preview" alt="Vista de la foto reducida">
+<script type="module">
+import { readImageForUpload } from '../client/image-upload.mjs';
+const blob = (canvas, type = 'image/png', quality = 1) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
+const result = document.querySelector('#result');
+document.querySelector('#run').onclick = async event => {
+  event.target.disabled = true;
+  result.textContent = 'Preparando imágenes de prueba…';
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 3000;
+    canvas.height = 2200;
+    const ctx = canvas.getContext('2d');
+    const pixels = ctx.createImageData(canvas.width, canvas.height);
+    let seed = 41;
+    for (let i = 0; i < pixels.data.length; i += 4) {
+      seed = (1664525 * seed + 1013904223) >>> 0;
+      pixels.data[i] = seed & 255;
+      pixels.data[i + 1] = (seed >>> 8) & 255;
+      pixels.data[i + 2] = (seed >>> 16) & 255;
+      pixels.data[i + 3] = 255;
+    }
+    ctx.putImageData(pixels, 0, 0);
+    const original = await blob(canvas);
+    if (original.size <= 1500000) throw new Error('El archivo de prueba no supera el límite original');
+    const began = performance.now();
+    const uri = await readImageForUpload(new File([original], 'foto-grande.png', { type: original.type }));
+    const bytes = Math.floor(uri.split(',')[1].length * 3 / 4) - (uri.endsWith('==') ? 2 : uri.endsWith('=') ? 1 : 0);
+    const image = new Image();
+    image.src = uri;
+    await image.decode();
+    if (bytes > 1450000 || uri.length > 2000000) throw new Error('La compresión excede el límite del servidor');
+    if (Math.max(image.naturalWidth, image.naturalHeight) > 1920) throw new Error('La foto conserva demasiados píxeles');
+    const landscapeResult = `Foto PNG grande: ${(original.size / 1e6).toFixed(2)} MB → ${(bytes / 1e6).toFixed(2)} MB\nResolución: ${image.naturalWidth} × ${image.naturalHeight}\nProcesamiento: ${Math.round(performance.now() - began)} ms`;
+    canvas.width = 2400;
+    canvas.height = 3200;
+    ctx.fillStyle = '#f26522';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const portrait = await blob(canvas, 'image/jpeg');
+    // Exceeds the source budget via JPEG padding; decoding still uses the genuine image.
+    const largePortrait = new File([portrait, new Uint8Array(2000000)], 'vertical.jpg', { type: 'image/jpeg' });
+    const portraitUri = await readImageForUpload(largePortrait);
+    image.src = portraitUri;
+    await image.decode();
+    if (image.naturalWidth >= image.naturalHeight) throw new Error('Se alteró la orientación vertical');
+    document.querySelector('#preview').src = uri;
+    result.textContent = `APROBADO\n${landscapeResult}\nFoto vertical: orientación conservada (${image.naturalWidth} × ${image.naturalHeight})\nAmbos archivos son aceptables para el límite de Apps Script.`;
+  } catch (error) {
+    result.textContent = `ERROR: ${error.message}`;
+  } finally {
+    event.target.disabled = false;
+  }
+};
+</script>
+</html>
