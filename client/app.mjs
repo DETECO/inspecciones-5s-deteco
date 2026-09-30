@@ -3,13 +3,12 @@ import { isoWeekChile, inspectionWindow } from '../domain/calendar.mjs';
 import { validateInspection } from '../domain/scoring.mjs';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
-import { createIndexedDraftStore } from './draft-store.mjs';
 import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
 import { createFormBridge } from '../transport/form-client.mjs';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
-import { mergeServerState } from './state-merge.mjs?v=20260930-answers-photos';
 import { readImageForUpload } from './image-upload.mjs';
+import { submitFinalInspection } from './final-submit.mjs?v=20260930-final-submit';
 import {
   createInspection,
   reserveInspection,
@@ -25,7 +24,6 @@ const sessionKey = 'deteco-5s.active-qr';
 const namesKey = 'deteco-5s.inspector-names';
 const clientKey = 'deteco-5s.client-id';
 const appConfig = resolveAppConfig(window.DETECO_5S_CONFIG || {});
-const draftStore = createIndexedDraftStore();
 
 const state = {
   route: null,
@@ -49,6 +47,9 @@ const state = {
   flashOn: false,
   closing: false,
   photoUploads: 0,
+  sessionId: crypto.randomUUID(),
+  completedAt: '',
+  uploadCache: new Map(),
   clientId: localStorage.getItem(clientKey) || crypto.randomUUID(),
 };
 
@@ -71,53 +72,10 @@ function ensureBridgeSession() {
       accessToken: state.route.accessToken,
       clientId: state.clientId,
     });
-    state.bridgeSession.restore(state.syncQueue);
   }
   return state.bridgeSession;
 }
 
-async function applyBridgeReceipt(receipt) {
-  if (receipt?.station && receipt.station.id === state.route?.stationId) state.station = receipt.station;
-  if (Array.isArray(receipt?.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-  if (receipt?.previousWeekAlert) state.previousWeekAlert = receipt.previousWeekAlert;
-  if (receipt?.state) state.inspection = mergeServerState(receipt.state, state.inspection || {}, state.bridgeSession?.pending() || []);
-  state.syncQueue = state.bridgeSession?.pending() || [];
-  state.syncStatus = state.syncQueue.length ? 'Pendiente de envío' : 'Sincronizado';
-  await draftSave();
-}
-
-async function flushBridgeQueue() {
-  const session = ensureBridgeSession();
-  if (!session || !navigator.onLine || !session.pending().length) return;
-  state.syncStatus = 'Sincronizando';
-  render();
-  try {
-    await session.flush({ onReceipt: applyBridgeReceipt });
-    state.syncStatus = 'Sincronizado';
-    state.error = '';
-  } catch (error) {
-    state.syncQueue = session.pending();
-    state.syncStatus = 'Pendiente de envío';
-    if (navigator.onLine) state.error = `No llegó confirmación de guardado. El avance sigue en este teléfono: ${error.message}`;
-    await draftSave();
-  }
-  render();
-}
-
-async function queueBridgeOperations(operations) {
-  const session = ensureBridgeSession();
-  if (!session) return;
-  for (const { operation, payload } of operations) session.enqueue(operation, payload);
-  state.syncQueue = session.pending();
-  state.syncStatus = navigator.onLine ? 'Pendiente de envío' : 'Sin conexión';
-  render();
-  await draftSave();
-  if (navigator.onLine) await flushBridgeQueue();
-}
-
-function queueBridgeOperation(operation, payload) {
-  return queueBridgeOperations([{ operation, payload }]);
-}
 
 async function initializeApp() {
   const openedFromQrUrl = activateRoute();
@@ -134,14 +92,13 @@ async function initializeApp() {
 
   if (state.route) {
     try {
-      await draftLoad();
       if (appConfig.mode === 'bridge') {
         ensureBridgeSession();
         state.qrValidationPending = false;
         state.qrAccessValidated = false;
         state.scanNotice = navigator.onLine
           ? `QR leído: ${state.station.name}. Ingresa tu nombre para validar y comenzar.`
-          : `QR leído: ${state.station.name}. Sin internet solo puedes retomar un avance guardado en este teléfono.`;
+          : `QR leído: ${state.station.name}. Necesitas internet para iniciar.`;
         state.syncStatus = state.syncQueue.length ? 'Pendiente de envío' : navigator.onLine ? 'Listo para validar' : 'Sin conexión';
       } else {
         state.qrValidationPending = false;
@@ -182,38 +139,9 @@ function rememberNames(name) {
   localStorage.setItem(namesKey, JSON.stringify(next));
 }
 
-async function draftSave() {
-  if (!state.inspection || !state.route) return;
-  const record = {
-    inspectorName: state.inspectorName,
-    station: state.station,
-    inspection: state.inspection,
-    moduleIndex: state.moduleIndex,
-    syncQueue: state.bridgeSession?.pending() || state.syncQueue,
-    previousWeekAlert: state.previousWeekAlert,
-  };
-  await draftStore.save(draftKey(), record);
-  state.syncQueue = state.bridgeSession?.pending() || record.syncQueue;
-}
-
-function persistDraftQuietly() {
-  draftSave().catch(error => {
-    state.error = `No se pudo guardar el avance en este teléfono: ${error.message}`;
-    render();
-  });
-}
-
-async function draftLoad() {
-  const saved = await draftStore.load(draftKey());
-  if (!saved?.inspection || saved.inspection.stationId !== state.route.stationId || saved.inspection.week !== state.week.key) return;
-  state.inspection = saved.inspection;
-  if (saved.station?.id === state.route.stationId) state.station = saved.station;
-  state.syncQueue = saved.syncQueue || [];
-  state.previousWeekAlert = saved.previousWeekAlert || null;
-  state.inspectorName = saved.inspectorName || saved.inspection.editor?.inspectorName || saved.inspection.startedBy || '';
-  state.moduleIndex = Math.min(Math.max(Number(saved.moduleIndex) || 0, 0), MODULES.length - 1);
-  state.screen = saved.inspection.status === 'closed' || saved.inspection.status === 'expired' ? 'summary' : 'identity';
-}
+async function draftSave() {} // No resumable storage in the final-only flow.
+async function draftLoad() {} // Legacy drafts remain untouched.
+function persistDraftQuietly() {}
 
 function activateRoute() {
   let route = null;
@@ -528,32 +456,30 @@ function scheduleMessage() {
   const windowState = currentWindow();
   if (windowState === 'open') return '';
   if (windowState === 'late-continuation') return `<div class="notice"><span class="notice-icon">!</span><span>Solo puedes terminar una inspección ya iniciada. Al cerrar se registrará como <strong>cumplida con atraso</strong>.</span></div>`;
-  return `<div class="notice danger"><span class="notice-icon">!</span><span>La edición está bloqueada por horario. Puedes inspeccionar de lunes a miércoles entre 08:15 y 17:00, y el jueves hasta las 12:00. Después del jueves 12:00 solo se retoma una inspección ya iniciada, hasta las 17:00.</span></div>`;
+  return `<div class="notice danger"><span class="notice-icon">!</span><span>Puedes iniciar de lunes a miércoles entre 08:15 y 17:00, y el jueves hasta las 12:00. El jueves hasta las 17:00 solo se permite terminar una inspección iniciada antes de las 12:00 en esta misma página.</span></div>`;
 }
 
 function identityPage() {
-  if (state.inspection?.status === 'closed' || state.inspection?.status === 'expired') return summaryPage();
+  const unavailable = ['closed', 'expired'].includes(state.inspection?.status);
   const heldByOther = Boolean(state.inspection?.editor && state.inspection.editor.clientId !== state.clientId);
-  const waitingForTakeover = state.inspection?.takeover?.requestedBy === state.clientId;
-  const offlineDraftCanContinue = !navigator.onLine && state.inspection?.editor?.clientId === state.clientId;
   const canStart = !state.qrValidationPending
-    && (appConfig.mode !== 'bridge' || state.qrAccessValidated || navigator.onLine || offlineDraftCanContinue)
+    && navigator.onLine
     && !heldByOther
-    && (currentWindow() === 'open' || (currentWindow() === 'late-continuation' && (navigator.onLine || Boolean(state.inspection?.startedAt))));
-  const existing = Boolean(state.inspection);
+    && !unavailable
+    && currentWindow() === 'open';
   const names = [...new Set([...state.knownInspectors, ...storageRead(namesKey, [])].map(name => String(name).trim()).filter(Boolean))]
     .map(name => `<option value="${esc(name)}"></option>`).join('');
   return `
     <section class="page-enter">
-      <div class="eyebrow">${existing ? 'Inspección en curso' : 'Semana disponible'}</div>
+      <div class="eyebrow">Nueva inspección</div>
       ${state.scanNotice ? `<div class="notice ${state.qrAccessValidated ? 'good' : ''}"><span class="notice-icon">${state.qrAccessValidated ? '✓' : 'i'}</span><span>${esc(state.scanNotice)}</span></div>` : ''}
-      <h1>${existing ? 'Retoma la inspección' : 'Identifícate para continuar'}</h1>
-      <p class="lead">${existing ? `El avance de esta estación se conserva. La responsabilidad inicial corresponde a ${esc(state.inspection.startedBy)}.` : 'Escribe tu nombre para dejar trazabilidad de quién realiza la inspección.'}</p>
-      ${heldByOther ? `<div class="notice"><span class="notice-icon">↗</span><span>${waitingForTakeover ? 'Tu solicitud está enviada. Espera a que el teléfono actual entregue el control.' : `La inspección está abierta en el teléfono de ${esc(state.inspection.editor.inspectorName)}. Puedes solicitar continuarla.`}</span></div>` : ''}
-      ${appConfig.mode === 'bridge' && !navigator.onLine && !offlineDraftCanContinue ? '<div class="notice"><span class="notice-icon">!</span><span>Necesitas internet para validar el QR e iniciar una nueva inspección.</span></div>' : ''}
+      <h1>Identifícate para comenzar</h1>
+      <p class="lead">Completa la inspección sin cerrar esta página. Las respuestas y fotos se envían únicamente al cerrar.</p>
+      ${heldByOther ? `<div class="notice"><span class="notice-icon">!</span><span>La estación está reservada por ${esc(state.inspection.editor.inspectorName)}. Solicita su liberación al administrador si esa inspección fue abandonada.</span></div>` : ''}
+      ${appConfig.mode === 'bridge' && !navigator.onLine ? '<div class="notice"><span class="notice-icon">!</span><span>Necesitas internet para validar el QR e iniciar una nueva inspección.</span></div>' : ''}
       ${scheduleMessage()}${errorNotice()}
       <div class="field"><label for="inspector-name">Nombre del inspector</label><input class="input" id="inspector-name" list="known-inspectors" maxlength="80" autocomplete="name" value="${esc(state.inspectorName)}" placeholder="Escribe o selecciona tu nombre"><datalist id="known-inspectors">${names}</datalist><p class="hint">Si no apareces, escribe tu nombre y se agregará para próximas inspecciones.</p></div>
-      <button class="primary" data-action="${heldByOther ? 'request-takeover' : 'start'}" ${heldByOther ? waitingForTakeover ? 'disabled' : '' : canStart ? '' : 'disabled'}>${heldByOther ? waitingForTakeover ? 'Esperando autorización' : 'Solicitar continuar' : existing ? 'Retomar inspección' : 'Iniciar inspección'}</button>
+      <button class="primary" data-action="start" ${canStart && navigator.onLine ? '' : 'disabled'}>Iniciar inspección</button>
       ${appConfig.mode === 'bridge' && !state.qrAccessValidated ? '<div class="identity-recovery"><button class="help-link" type="button" data-action="rescan-qr">Volver a escanear QR</button></div>' : ''}
     </section>`;
 }
@@ -599,7 +525,7 @@ function modulePage() {
       <h1>${esc(module.title)}</h1>
       <p class="lead">Selecciona de 0 a 5 hallazgos. Cada hallazgo necesita una fotografía; la nota descriptiva es opcional.</p>
       ${tabs()}${errorNotice()}
-      ${state.photoUploads ? '<p class="hint" role="status">Preparando y guardando fotografía…</p>' : ''}
+      ${state.photoUploads ? '<p class="hint" role="status">Preparando fotografía en el teléfono…</p>' : ''}
       <div>${module.questions.map((question, index) => questionCard(question, index)).join('')}</div>
     </section>
     ${footer(moduleFooter())}`;
@@ -646,7 +572,7 @@ function reviewPage() {
       ${checks.map(([label, complete]) => `<div class="check"><span class="check-mark ${complete ? 'done' : ''}">${complete ? '✓' : ''}</span><span>${label}</span></div>`).join('')}
       ${!ready ? `<div class="notice"><span class="notice-icon">!</span><span>Completa los elementos pendientes antes de cerrar. No se mostrará una nota parcial.</span></div>` : `<div class="notice good"><span class="notice-icon">✓</span><span>La inspección está completa y puede cerrarse.</span></div>`}${errorNotice()}
     </section>
-    ${state.photoUploads ? '<p class="hint" role="status">Preparando y guardando fotografía…</p>' : ''}
+      ${state.photoUploads ? '<p class="hint" role="status">Preparando fotografía en el teléfono…</p>' : ''}
     ${footer(`<div class="button-row"><button class="secondary" data-action="back-to-module" ${state.closing ? 'disabled' : ''}>Volver a preguntas</button><button class="primary" data-action="close" ${ready && !state.closing && !state.photoUploads ? '' : 'disabled'}>${state.closing ? 'Guardando y cerrando…' : 'Cerrar inspección'}</button></div>`)}`;
 }
 
@@ -660,7 +586,7 @@ function summaryPage() {
       <div class="summary-hero"><small>Nota final</small><div class="summary-score"><strong>${number(result.finalScore)}</strong><span class="${scoreGood ? '' : 'low'}">${scoreGood ? 'SATISFACTORIA' : 'BAJO 4,0'}</span></div></div>
       ${MODULES.map(module => `<div class="score-row"><strong>${esc(module.title)}</strong><span class="${result.moduleScores[module.id] < 4 ? 'low' : ''}">${number(result.moduleScores[module.id])}</span></div>`).join('')}
       <div class="notice ${result.completionStatus === 'vencida-cerrada-incompleta' ? 'danger' : 'good'}"><span class="notice-icon">${result.completionStatus === 'vencida-cerrada-incompleta' ? '!' : '✓'}</span><span>${result.completionStatus === 'vencida-cerrada-incompleta' ? 'Cerrada incompleta al vencer la semana; nota 0 en todos los módulos.' : result.completionStatus === 'cumplida-con-atraso' ? 'Cumplida con atraso.' : 'Cumplida.'} ${state.inspection.closedBy ? `Cerrada por ${esc(state.inspection.closedBy)}.` : ''}</span></div>
-      <p class="small">${state.syncStatus === 'Sincronizado' ? 'Registro guardado en Google Sheets y Drive.' : 'Este resultado está guardado como borrador local y todavía no se ha enviado a Google.'}</p>
+      <p class="small">${appConfig.mode === 'bridge' ? 'Registro guardado en Google Sheets y Drive.' : 'Prueba local: este resultado no se ha enviado a Google.'}</p>
     </section>`;
 }
 
@@ -668,11 +594,6 @@ function footer(content) {
   return `<footer class="footer">${content}</footer>`;
 }
 
-function takeoverPrompt() {
-  const takeover = state.inspection?.takeover;
-  if (!takeover || state.inspection.editor?.clientId !== state.clientId) return '';
-  return `<div class="notice"><span class="notice-icon">↗</span><span>${esc(takeover.inspectorName)} solicita continuar esta inspección desde otro teléfono.</span><button class="secondary" data-action="approve-takeover" ${state.syncQueue.length ? 'disabled' : ''}>Entregar control</button>${state.syncQueue.length ? '<p class="hint">Espera a que se envíen los cambios pendientes antes de entregar.</p>' : ''}</div>`;
-}
 
 function previousWeekNotice() {
   const alert = state.previousWeekAlert;
@@ -697,7 +618,8 @@ function render() {
   else if (state.screen === 'summary') content = summaryPage();
   else content = qrPage();
   const mainClass = !state.route && state.screen === 'qr' ? 'home-main' : '';
-  appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${takeoverPrompt()}${content}</main>`;
+  appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${content}</main>`;
+  if (state.closing) appElement.querySelectorAll?.('input, textarea, button').forEach(control => { control.disabled = true; });
   if (preserveInspectorFocus && state.screen === 'identity') {
     const restoredInput = appElement.querySelector('#inspector-name');
     if (restoredInput) {
@@ -723,21 +645,17 @@ async function start() {
     render();
   }
   try {
-    if (!state.inspection) state.inspection = createInspection({ stationId: state.route.stationId, week: state.week.key });
+    state.inspection = createInspection({ stationId: state.route.stationId, week: state.week.key });
     if (appConfig.mode === 'bridge') {
-      if (!navigator.onLine) {
-        if (state.inspection.status !== 'open' || state.inspection.editor?.clientId !== state.clientId) {
-          throw new Error('Conéctate a internet para reservar esta estación. Si ya la tienes abierta en este teléfono, puedes continuar con el avance guardado.');
-        }
-      } else {
-        await flushBridgeQueue();
-        if (ensureBridgeSession().pending().length) throw new Error('Primero espera que se sincronicen los cambios guardados en este teléfono.');
-        const receipt = await ensureBridgeSession().sendNow('reserve', { inspectorName: name });
-        state.inspection = mergeServerState(receipt.state, state.inspection);
+      if (!navigator.onLine) throw new Error('Necesitas internet para iniciar la inspección.');
+      {
+        const receipt = await ensureBridgeSession().sendNow('begin-final', { inspectorName: name, sessionId: state.sessionId });
+        if (!receipt?.state) throw new Error('No llegó confirmación del inicio. Inténtalo nuevamente.');
+        state.inspection = receipt.state;
         if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
         if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
         if (receipt.previousWeekAlert) state.previousWeekAlert = receipt.previousWeekAlert;
-        state.syncStatus = 'Sincronizado';
+        state.syncStatus = 'Guardado al cerrar';
         state.qrAccessValidated = true;
       }
     } else {
@@ -747,7 +665,12 @@ async function start() {
     state.qrValidationPending = false;
     rememberNames(name);
     state.error = '';
-    state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
+    if (['closed', 'expired'].includes(state.inspection.status)) {
+      state.screen = state.inspection.status === 'closed' && state.inspection.finalSessionId === state.sessionId ? 'summary' : 'identity';
+      if (state.screen === 'identity') state.error = 'La inspección de esta estación y semana ya está cerrada o vencida. No se puede iniciar otra.';
+    } else {
+      state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
+    }
     await draftSave();
     render();
   } catch (error) {
@@ -756,16 +679,19 @@ async function start() {
     state.error = error.message;
     if (appConfig.mode === 'bridge' && navigator.onLine) {
       try {
-        const receipt = await ensureBridgeSession().readState();
+        const receipt = await ensureBridgeSession().sendNow('final-state', { sessionId: state.sessionId });
         if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
         if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-        state.inspection = mergeServerState(receipt.state, state.inspection || {}, state.bridgeSession?.pending() || []);
+        if (receipt.state) state.inspection = receipt.state;
         state.qrAccessValidated = true;
-        state.syncStatus = 'Sincronizado';
-        state.scanNotice = `Estación ${state.station.name} verificada. Elige cómo continuar.`;
-        if (state.inspection.status === 'closed' || state.inspection.status === 'expired') {
+        state.syncStatus = receipt.state?.status === 'closed' ? 'Guardado confirmado' : 'Listo para iniciar';
+        state.scanNotice = `Estación ${state.station.name} verificada.`;
+        if (state.inspection.status === 'closed' && state.inspection.finalSessionId === state.sessionId) {
           state.screen = 'summary';
           state.error = '';
+        } else if (['closed', 'expired'].includes(state.inspection.status)) {
+          state.screen = 'identity';
+          state.error = 'La inspección de esta estación y semana ya está cerrada o vencida. No se puede iniciar otra.';
         } else if (state.inspection.editor && state.inspection.editor.clientId !== state.clientId) {
           state.screen = 'identity';
           state.error = '';
@@ -778,75 +704,6 @@ async function start() {
   }
 }
 
-async function requestTakeoverFromCurrentEditor() {
-  const name = document.querySelector('#inspector-name')?.value.trim() || '';
-  state.inspectorName = name;
-  if (name.length < 2) {
-    state.error = 'Escribe tu nombre para solicitar continuar.';
-    render();
-    return;
-  }
-  try {
-    const receipt = await ensureBridgeSession().sendNow('request-takeover', { inspectorName: name });
-    state.inspection = mergeServerState(receipt.state, state.inspection);
-    if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-    state.inspectorName = name;
-    state.error = '';
-    state.syncStatus = 'Sincronizado';
-    rememberNames(name);
-    await draftSave();
-  } catch (error) {
-    state.error = error.message;
-  }
-  render();
-}
-
-async function approveTakeover() {
-  try {
-    const pendingSyncOps = ensureBridgeSession().pending().length;
-    const receipt = await ensureBridgeSession().sendNow('acknowledge-takeover', { pendingSyncOps });
-    state.inspection = mergeServerState(receipt.state, state.inspection);
-    if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-    if (state.inspection.editor?.clientId !== state.clientId) {
-      state.screen = 'identity';
-      state.error = 'El control se entregó al otro teléfono. Tu avance quedó guardado.';
-    }
-    await draftSave();
-  } catch (error) {
-    state.error = error.message;
-  }
-  render();
-}
-
-async function refreshServerState() {
-  if (appConfig.mode !== 'bridge' || !state.route || !state.qrAccessValidated || !navigator.onLine || document.hidden) return;
-  if (state.closing || state.photoUploads || state.screen === 'kaizen') return;
-  const session = ensureBridgeSession();
-  if (session.pending().length) return;
-  const revision = session.revision();
-  try {
-    const receipt = await session.readState();
-    // A read started before a new answer must not replace the newer confirmed state.
-    if (revision !== session.revision() || state.closing || state.photoUploads) return;
-    state.inspection = mergeServerState(receipt.state, state.inspection || {}, state.bridgeSession?.pending() || []);
-    if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
-    if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-    state.syncStatus = 'Sincronizado';
-    if (state.error.startsWith('No se pudo cargar la inspección:')) state.error = '';
-    if (state.inspection.status === 'closed' || state.inspection.status === 'expired') {
-      state.screen = 'summary';
-    } else if (state.inspection.editor?.clientId === state.clientId && state.inspection.startedAt) {
-      if (state.screen === 'identity') state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
-      state.inspectorName ||= state.inspection.editor.inspectorName || '';
-    } else if (state.inspection.editor?.clientId !== state.clientId && state.screen !== 'qr') {
-      state.screen = 'identity';
-    }
-    await draftSave();
-  } catch {
-    state.syncStatus = navigator.onLine ? 'Sin respuesta' : 'Sin conexión';
-  }
-  render();
-}
 
 async function changeAnswer(questionId, count) {
   if (state.closing) return;
@@ -855,12 +712,10 @@ async function changeAnswer(questionId, count) {
   try {
     state.error = '';
     state.inspection = saveAnswer(state.inspection, { clientId: state.clientId, questionId, count });
-    const operations = [{ operation: 'save-answer', payload: { questionId, count } }];
     if (count < previousItems.length) {
       state.inspection = discardExtraFindings(state.inspection, { clientId: state.clientId, questionId });
-      operations.push({ operation: 'discard-extra-findings', payload: { questionId } });
     }
-    await queueBridgeOperations(operations);
+    state.completedAt = '';
     await draftSave();
   } catch (error) {
     state.error = error.message;
@@ -889,11 +744,7 @@ async function addFindingPhoto(target) {
       ordinal,
       finding: { ...existing, id: existing.id || crypto.randomUUID(), photoId: `local-${crypto.randomUUID()}`, preview, dataUri: preview },
     });
-    await queueBridgeOperation('save-finding', {
-      questionId,
-      ordinal,
-      finding: { id: state.inspection.findings[questionId][ordinal - 1].id, dataUri: preview, note: existing.note || '' },
-    });
+    state.completedAt = '';
     await draftSave();
   } catch (error) {
     state.error = error.message;
@@ -910,31 +761,16 @@ function setFindingNote(target) {
   const current = items[ordinal - 1] || { id: crypto.randomUUID(), photoId: '' };
   items[ordinal - 1] = { ...current, note: target.value };
   state.inspection = { ...state.inspection, findings: { ...state.inspection.findings, [questionId]: items } };
+  state.completedAt = '';
   persistDraftQuietly();
 }
 
-async function syncFindingNote(target) {
-  const questionId = target.dataset.question;
-  const ordinal = Number(target.dataset.ordinal);
-  const finding = state.inspection.findings[questionId]?.[ordinal - 1];
-  if (finding?.dataUri) {
-    try {
-      await queueBridgeOperation('save-finding', {
-        questionId,
-        ordinal,
-        finding: { id: finding.id, dataUri: finding.dataUri, note: finding.note || '' },
-      });
-    } catch (error) {
-      state.error = error.message;
-    }
-  }
-  await draftSave();
-}
 
 function setKaizenDecision(target) {
   const id = target.dataset.kaizen;
   const review = state.inspection.kaizenReviews[id] || {};
   state.inspection = { ...state.inspection, kaizenReviews: { ...state.inspection.kaizenReviews, [id]: { ...review, decision: target.dataset.decision } } };
+  state.completedAt = '';
   persistDraftQuietly();
   render();
 }
@@ -942,6 +778,7 @@ function setKaizenDecision(target) {
 function setKaizenReason(target) {
   const review = state.inspection.kaizenReviews[target.dataset.kaizen] || {};
   state.inspection = { ...state.inspection, kaizenReviews: { ...state.inspection.kaizenReviews, [target.dataset.kaizen]: { ...review, reason: target.value } } };
+  state.completedAt = '';
   persistDraftQuietly();
 }
 
@@ -955,6 +792,7 @@ async function addKaizenPhoto(target) {
     const id = target.dataset.kaizen;
     const review = state.inspection.kaizenReviews[id] || { decision: 'solved' };
     state.inspection = { ...state.inspection, kaizenReviews: { ...state.inspection.kaizenReviews, [id]: { ...review, photoId: `local-${crypto.randomUUID()}`, preview, dataUri: preview } } };
+    state.completedAt = '';
     state.error = '';
     persistDraftQuietly();
   } catch (error) {
@@ -972,25 +810,6 @@ async function continueKaizen() {
     render();
     return;
   }
-  try {
-    if (appConfig.mode === 'bridge') {
-      const operations = state.inspection.pendingKaizen.map(item => {
-        const review = state.inspection.kaizenReviews[item.id];
-        return { operation: 'review-kaizen', payload: {
-          kaizenId: item.id,
-          review: {
-            ...review,
-            dataUri: review.decision === 'solved' ? review.dataUri || review.preview : undefined,
-          },
-        } };
-      });
-      await queueBridgeOperations(operations);
-    }
-  } catch (error) {
-    state.error = error.message;
-    render();
-    return;
-  }
   state.error = '';
   state.screen = 'module';
   await draftSave();
@@ -1004,26 +823,19 @@ async function close() {
     render();
     return;
   }
-  const completedAt = new Date().toISOString();
+  const completedAt = state.completedAt || new Date().toISOString();
   state.closing = true;
   render();
   try {
-    if (currentWindow() === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
+    if (!state.completedAt && currentWindow() === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
     if (appConfig.mode === 'bridge') {
-      const localClose = closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
-      if (navigator.onLine) {
-        await flushBridgeQueue();
-        if (ensureBridgeSession().pending().length) throw new Error('Hay cambios sin sincronizar. Espera la confirmación antes de cerrar.');
-        closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
-        const receipt = await ensureBridgeSession().sendNow('close', { occurredAt: completedAt });
-        state.inspection = mergeServerState(receipt.state, state.inspection);
-        state.syncStatus = 'Sincronizado';
-      } else {
-        state.inspection = localClose;
-        state.syncStatus = 'Pendiente de envío';
-        state.screen = 'summary';
-        await queueBridgeOperation('close', { occurredAt: completedAt });
-      }
+      closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
+      state.completedAt = completedAt;
+      if (!navigator.onLine) throw new Error('Necesitas internet para cerrar. Mantén esta página abierta y reintenta cuando vuelva la conexión.');
+      const receipt = await submitFinalInspection({ session: ensureBridgeSession(), inspection: state.inspection, sessionId: state.sessionId, occurredAt: completedAt, uploadCache: state.uploadCache,
+        onProgress(message) { state.syncStatus = message; render(); } });
+      state.inspection = receipt.state;
+      state.syncStatus = 'Guardado confirmado';
       state.screen = 'summary';
     } else {
       state.inspection = closeInspection(state.inspection, { clientId: state.clientId, at: new Date().toISOString(), completionStatus: completionStatus() });
@@ -1032,23 +844,6 @@ async function close() {
     state.error = '';
     await draftSave();
   } catch (error) {
-    if (appConfig.mode === 'bridge' && navigator.onLine) {
-      try {
-        const receipt = await ensureBridgeSession().readState();
-        if (receipt.state.status === 'closed' || receipt.state.status === 'expired') {
-          state.inspection = mergeServerState(receipt.state, state.inspection);
-          if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
-          state.syncStatus = 'Sincronizado';
-          state.screen = 'summary';
-          state.error = '';
-          await draftSave();
-          render();
-          return;
-        }
-      } catch {
-        // Keep the original error if the follow-up state check also fails.
-      }
-    }
     state.error = error.message;
   } finally {
     state.closing = false;
@@ -1069,8 +864,6 @@ appElement.addEventListener('click', event => {
   if (action === 'show-scan-help') document.querySelector('#scan-help-dialog')?.showModal();
   if (action === 'close-scan-help') document.querySelector('#scan-help-dialog')?.close();
   if (action === 'start') start();
-  if (action === 'request-takeover') requestTakeoverFromCurrentEditor();
-  if (action === 'approve-takeover') approveTakeover();
   if (action === 'answer') changeAnswer(target.dataset.question, Number(target.dataset.count));
   if (action === 'module') { state.moduleIndex = Number(target.dataset.index); state.screen = 'module'; persistDraftQuietly(); render(); }
   if (action === 'previous-module') { state.moduleIndex -= 1; persistDraftQuietly(); render(); }
@@ -1083,13 +876,14 @@ appElement.addEventListener('click', event => {
 });
 
 appElement.addEventListener('change', event => {
+  if (state.closing) return;
   const target = event.target;
   if (target.dataset.action === 'finding-photo') addFindingPhoto(target);
   if (target.dataset.action === 'kaizen-photo') addKaizenPhoto(target);
-  if (target.dataset.action === 'finding-note') syncFindingNote(target);
 });
 
 appElement.addEventListener('input', event => {
+  if (state.closing) return;
   const target = event.target;
   if (target.id === 'inspector-name') state.inspectorName = target.value;
   if (target.dataset.action === 'finding-note') setFindingNote(target);
@@ -1097,11 +891,15 @@ appElement.addEventListener('input', event => {
 });
 
 window.addEventListener('online', async () => {
-  if (state.syncQueue.length && state.qrAccessValidated) flushBridgeQueue();
-  else render();
+  render();
 });
 window.addEventListener('offline', render);
 window.addEventListener('pagehide', disposeQrScanner);
-window.setInterval(refreshServerState, 10000);
+window.addEventListener('beforeunload', event => {
+  if (state.inspection?.status === 'open') {
+    event.preventDefault();
+    event.returnValue = 'La inspección aún no se ha enviado. Si sales tendrás que comenzar nuevamente.';
+  }
+});
 
 initializeApp();

@@ -11,12 +11,12 @@ test('el nombre y la selección del inspector sobreviven a una actualización de
 });
 
 test('el nombre queda guardado en el estado antes de solicitar reserva al servidor', () => {
-  const start = source.slice(source.indexOf('async function start()'), source.indexOf('async function requestTakeoverFromCurrentEditor()'));
+  const start = source.slice(source.indexOf('async function start()'), source.indexOf('async function changeAnswer('));
   assert.match(start, /state\.inspectorName\s*=\s*name/);
-  assert.ok(start.indexOf('state.inspectorName = name') < start.indexOf("sendNow('reserve'"));
+  assert.ok(start.indexOf('state.inspectorName = name') < start.indexOf("sendNow('begin-final'"));
 });
 
-test('un tiempo de espera con internet no se etiqueta como falta de conexión', () => {
-  const refresh = source.slice(source.indexOf('async function refreshServerState()'), source.indexOf('async function changeAnswer('));
-  assert.match(refresh, /state\.syncStatus\s*=\s*navigator\.onLine\s*\?\s*'Sin respuesta'\s*:\s*'Sin conexión'/);
+test('no existe actualización periódica que pueda reemplazar respuestas', () => {
+  assert.doesNotMatch(source, /setInterval\(refreshServerState/);
+  assert.doesNotMatch(source, /sendNow\('save-answer'/);
 });

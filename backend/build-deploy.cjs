@@ -17,7 +17,7 @@ function buildAdminHtml() {
 
 function writeDeploy(destination = path.join(base, 'deploy')) {
   fs.mkdirSync(destination, { recursive: true });
-  const code = [read('Bridge.gs'), buildCoreSource().trim(), read('Service.gs'), read('Code.gs')].join('\n\n');
+  const code = [read('Bridge.gs'), buildCoreSource().trim(), read('Service.gs'), read('FinalSubmission.gs'), read('Code.gs')].join('\n\n');
   const manifest = {
     timeZone: 'America/Santiago',
     exceptionLogging: 'STACKDRIVER',

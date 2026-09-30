@@ -88,6 +88,7 @@ function app5sPublicState_(state) {
     result: state.result ? { ...state.result, moduleScores: { ...state.result.moduleScores } } : null,
     closedAt: state.closedAt || '',
     closedBy: state.closedBy || '',
+    finalSessionId: state.finalSessionId || '',
   };
 }
 
@@ -383,7 +384,10 @@ function app5sAdminSnapshot_(adminEmail, week) {
     week,
     permissions,
     stations: app5sStationRegistry_().filter(station => station.active).map(station => {
-      const state = app5sLoadState_(station.id, week);
+      const stored = app5sLoadState_(station.id, week);
+      const lease = typeof app5sFinalLease_ === 'function' ? app5sFinalLease_(station.id, week) : null;
+      const state = lease && !['closed', 'expired'].includes(stored?.status)
+        ? { status: 'open', startedBy: lease.inspectorName, startedAt: lease.startedAt, editor: { clientId: lease.clientId, inspectorName: lease.inspectorName } } : stored;
       return {
         stationId: station.id,
         stationName: station.name,
@@ -545,6 +549,12 @@ function app5sAdminRelease(payload) {
     const week = isoWeekChile(app5sNow_()).key;
     if (payload.week !== week) throw new Error('La semana cambió. Actualiza el panel antes de liberar.');
     const state = app5sLoadState_(stationId, week);
+    const lease = typeof app5sFinalLease_ === 'function' ? app5sFinalLease_(stationId, week) : null;
+    if (lease && !['closed', 'expired'].includes(state?.status)) {
+      if (lease.clientId !== expectedEditorId) throw new Error('La reserva cambió desde que abriste el panel. Actualiza antes de liberar.');
+      app5sFinalRelease_(stationId, week);
+      if (!state?.editor) return app5sAdminSnapshot_(adminEmail, week);
+    }
     if (!state || state.status !== 'open' || !state.editor) throw new Error('La estación ya no tiene una reserva activa para liberar.');
     if (state.editor.clientId !== expectedEditorId) throw new Error('La reserva cambió desde que abriste el panel. Actualiza antes de liberar.');
 
@@ -779,6 +789,8 @@ function app5sHandle_(operation, payload, meta) {
   const stationId = app5sValidStation_(payload.stationId);
   app5sVerifyAccess_(stationId, payload.accessToken);
   return app5sWithLock_(() => {
+    if (['begin-final', 'upload-final-photo', 'submit-final', 'final-state'].includes(operation)) return app5sFinalHandle_(operation, payload, stationId, meta);
+    if (typeof app5sFinalLease_ === 'function' && operation !== 'state' && app5sFinalLease_(stationId, isoWeekChile(app5sNow_()).key)) throw new Error('Actualiza la app para usar el guardado completo al cerrar.');
     const service = app5sService_();
     let state;
     let previousWeekAlert = null;

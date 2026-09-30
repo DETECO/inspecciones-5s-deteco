@@ -86,15 +86,14 @@ test('la estación aparece sin una consulta previa al servidor; iniciar realiza 
   const start = appSource.match(/async function start\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 
   assert.ok(initializer.indexOf('render()') >= 0, 'el acceso QR debe dibujar la pantalla enseguida');
-  assert.ok(initializer.indexOf('render()') < initializer.indexOf('await draftLoad()'),
-    'el primer render debe preceder incluso la lectura local del borrador');
+  assert.doesNotMatch(initializer, /await draftLoad\(\)/,
+    'el nuevo flujo no retoma borradores');
   assert.doesNotMatch(initializer, /readState\(\)/,
     'no debe esperar una consulta de estado para mostrar la estación');
-  assert.match(start, /sendNow\('reserve'/,
+  assert.match(start, /sendNow\('begin-final'/,
     'el servidor debe validar el QR y reservar en el mismo paso al iniciar');
   assert.match(start, /qrValidationPending\s*=\s*true/,
     'la pantalla debe indicar que está comprobando y reservando durante la petición');
-  const refresh = appSource.match(/async function refreshServerState\(\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(refresh, /!state\.qrAccessValidated/,
-    'la sincronización periódica no consulta al servidor antes de iniciar');
+  assert.doesNotMatch(appSource, /setInterval\(refreshServerState/,
+    'no hay sincronización periódica de respuestas');
 });

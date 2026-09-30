@@ -3,11 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 const { writeCoreFile } = require('../build-core.cjs');
 
 writeCoreFile();
 const base = path.join(__dirname, '..');
-const source = ['deploy/Core.gs', 'Service.gs', 'Code.gs'].map(file => fs.readFileSync(path.join(base, file), 'utf8')).join('\n');
+const source = ['deploy/Core.gs', 'Service.gs', 'FinalSubmission.gs', 'Code.gs'].map(file => fs.readFileSync(path.join(base, file), 'utf8')).join('\n');
 
 function iterator(values) {
   let index = 0;
@@ -99,10 +100,12 @@ function harness() {
     app5sTestNow: '2026-09-21T11:15:00Z',
     Date, Intl, Object, Number, Array, Map, Set, String, RegExp, Error, TypeError, RangeError, JSON,
     SpreadsheetApp, DriveApp,
-    PropertiesService: { getScriptProperties: () => ({ getProperty: key => props[key] || '', setProperties: values => Object.assign(props, values) }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: key => props[key] || '', setProperties: values => Object.assign(props, values), getProperties: () => ({ ...props }), setProperty: (key, value) => { props[key] = value; }, deleteProperty: key => { delete props[key]; } }) },
     Session: { getActiveUser: () => ({ getEmail: () => activeEmail }) },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
     Utilities: {
+      DigestAlgorithm: { SHA_256: 'sha256' },
+      computeDigest: (_, value) => [...crypto.createHash('sha256').update(value).digest()],
       getUuid: () => `${String(nextId++).padStart(8, '0')}-1234-1234-1234-123456789abc`,
       base64Decode: value => Array.from(Buffer.from(value, 'base64')),
       base64Encode: bytes => Buffer.from(bytes).toString('base64'),
@@ -139,6 +142,45 @@ function accessFor(h, stationId) {
 function call(h, operation, payload) {
   return h.api.app5sHandle_(operation, payload, { requestId: 'r'.repeat(24), nonce: 'n'.repeat(24), receivedAt: '2026-09-21T11:15:00Z' });
 }
+
+test('flujo final real: inicio y foto no escriben Sheet; cierre completo materializa una sola vez', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const input = { stationId: 'oficina', accessToken: accessFor(h, 'oficina'), clientId: 'phone-a', sessionId: 'final-session-12345678', inspectorName: 'Prueba final' };
+  const before = JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows])));
+  const begun = call(h, 'begin-final', input);
+  assert.equal(begun.state.status, 'open');
+  assert.throws(() => call(h, 'begin-final', { ...input, clientId: 'phone-b' }), /reserva/);
+  const photo = call(h, 'upload-final-photo', { ...input, photoId: 'finding-final-1234', category: 'Hallazgos', dataUri: 'data:image/jpeg;base64,AAAA' });
+  assert.match(photo.photoId, /^file-/);
+  assert.equal(JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows]))), before);
+  const answers = Object.fromEntries(h.api.QUESTIONS.map(q => [q.id, q.id === 'SEP-01' ? 1 : 0]));
+  const completed = { ...input, answers, findings: { 'SEP-01': [{ id: 'finding-final-1234', photoId: photo.photoId, note: 'Hallazgo de prueba' }] }, kaizenReviews: {}, occurredAt: '2026-09-21T11:15:00Z' };
+  const closed = call(h, 'submit-final', completed);
+  assert.equal(closed.state.finalSessionId, input.sessionId);
+  assert.equal(closed.state.status, 'closed');
+  const after = JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows])));
+  call(h, 'submit-final', completed);
+  assert.equal(JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows]))), after);
+  assert.equal(book.getSheetByName('Inspecciones').rows.length, 2);
+  assert.equal(book.getSheetByName('Respuestas').rows.length, 26);
+  assert.equal(book.getSheetByName('Hallazgos').rows.length, 2);
+});
+
+test('administración muestra y libera reserva nueva sin escribir ni borrar respuestas', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const input = { stationId: 'oficina', accessToken: accessFor(h, 'oficina'), clientId: 'phone-a', sessionId: 'final-session-12345678', inspectorName: 'Prueba final' };
+  call(h, 'begin-final', input);
+  const snapshot = h.api.app5sAdminState();
+  const office = snapshot.stations.find(item => item.stationId === 'oficina');
+  assert.equal(office.editorName, 'Prueba final');
+  assert.equal(office.status, 'open');
+  h.api.app5sAdminRelease({ stationId: 'oficina', week: snapshot.week, expectedEditorId: 'phone-a', confirmed: true });
+  assert.throws(() => call(h, 'upload-final-photo', { ...input, photoId: 'finding-final-1234', category: 'Hallazgos', dataUri: 'data:image/jpeg;base64,AAAA' }), /reserva/);
+  assert.equal(call(h, 'begin-final', { ...input, clientId: 'phone-b', sessionId: 'other-session-123456' }).state.status, 'open');
+});
 
 test('un administrador activo de solo lectura puede ver el panel, pero no liberar ni configurar', () => {
   const h = harness();
