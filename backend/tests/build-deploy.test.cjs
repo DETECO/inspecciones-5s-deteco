@@ -63,3 +63,16 @@ test('el panel administrativo publica una vista Kaizen con filtros y carga difer
   assert.doesNotMatch(admin, /data-photo=|dataset\.photo/,
     'el navegador no debe recibir IDs internos de archivos Drive');
 });
+
+test('el panel distingue problemas de acceso Google y ofrece cambiar de cuenta o reintentar', () => {
+  const output = fs.mkdtempSync(path.join(os.tmpdir(), 'deteco-5s-admin-account-'));
+  writeDeploy(output);
+  const admin = fs.readFileSync(path.join(output, 'Admin.html'), 'utf8');
+  assert.match(admin, /id="access-actions"/);
+  assert.match(admin, /id="account-switch"[^>]*>Iniciar o cambiar cuenta/);
+  assert.match(admin, /id="retry-access"[^>]*>Volver a comprobar acceso/);
+  assert.match(admin, /La cuenta activa no pertenece a DETECO y no tiene acceso a este panel/);
+  assert.match(admin, /Tu cuenta DETECO todavía no tiene acceso al panel/);
+  assert.match(admin, /accounts\.google\.com\/AccountChooser\?continue=/);
+  assert.match(admin, /\.app5sAdminState\(\)/);
+});

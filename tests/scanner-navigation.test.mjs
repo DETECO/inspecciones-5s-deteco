@@ -25,10 +25,10 @@ test('al reconocer un QR guarda la ruta y muestra la identificación de la estac
   );
 });
 
-test('el enlace Administración usa la dirección Workspace y deja el puente para sincronizar', () => {
+test('el enlace Administración solicita elegir cuenta y deja el puente para sincronizar', () => {
   const header = appSource.match(/function header\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 
-  assert.match(header, /href="\$\{esc\(appConfig\.adminEndpoint\)\}"/);
+  assert.match(header, /href="\$\{esc\(appConfig\.adminLoginUrl\)\}"/);
   assert.doesNotMatch(header, /admin-link[^\n]*appConfig\.bridgeEndpoint/);
 });
 

@@ -27,6 +27,7 @@
     .admin-nav a.active{border-left:4px solid var(--orange);padding-left:9px;color:#bc4b16;background:var(--orange-pale)}
     .admin-nav img{width:22px;height:22px;object-fit:contain;opacity:.77}
     .admin-nav a.active img{filter:brightness(0) saturate(100%) invert(42%) sepia(89%) saturate(1369%) hue-rotate(352deg)}
+    .access-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin:-14px auto 30px}.access-actions[hidden]{display:none}.access-actions a,.access-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:43px;padding:0 15px;border:1px solid var(--orange);border-radius:8px;font-size:13px;font-weight:800;text-decoration:none}.access-actions a{color:#fff;background:var(--orange)}.access-actions a:hover{background:var(--orange-dark)}.access-actions button{color:var(--charcoal);background:#fff;border-color:var(--line)}
     .admin-sidebar-foot{margin:auto 11px 0;padding-top:25px;color:#8c8983;font-size:11px;line-height:1.5}
     .admin-workspace{min-width:0}
     .admin-topbar{display:flex;align-items:center;justify-content:space-between;min-height:67px;padding:0 32px;border-top:0;border-bottom:1px solid var(--line);color:#59616a;background:#fff}
@@ -63,6 +64,10 @@
       <section class="admin-intro"><h1 id="page-title">Control de estaciones</h1><p id="page-description">Administra las obras, los códigos QR y las reservas de inspección.</p></section>
       <main>
     <div id="message" class="message loading" role="status">Verificando tu cuenta y cargando las estaciones…</div>
+    <div id="access-actions" class="access-actions" hidden>
+      <a id="account-switch" href="#" target="_top">Iniciar o cambiar cuenta</a>
+      <button id="retry-access" type="button">Volver a comprobar acceso</button>
+    </div>
     <section id="panel" hidden>
       <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
       <div id="action-notice" class="notice" hidden role="status"></div>
@@ -2431,11 +2436,41 @@ var qrcode = function() {
         message.className = `message ${type}`;
         message.textContent = text;
         message.hidden = false;
+        el('access-actions').hidden = true;
         el('panel').hidden = true;
+      }
+      function accountChooserUrl() {
+        const candidates = [window.location.href, document.referrer];
+        try { candidates.unshift(window.top.location.href); } catch {}
+        for (const candidate of candidates) {
+          const deploymentId = String(candidate || '').match(/\/s\/([A-Za-z0-9_-]+)\/exec(?:[/?#]|$)/)?.[1];
+          if (deploymentId) {
+            const continuation = `https://script.google.com/a/macros/deteco.cl/s/${deploymentId}/exec`;
+            return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(continuation)}`;
+          }
+        }
+        const fallback = window.location.href.split('#')[0];
+        return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(fallback)}`;
+      }
+      function showAccessMessage(error) {
+        const raw = String(error?.message || error || 'No se pudo validar el acceso.').replace(/^Exception:\s*/i, '').trim();
+        let message = raw;
+        if (raw.includes('Inicia sesión con tu cuenta Google Workspace autorizada.')) {
+          message = 'No se reconoció una sesión Google Workspace de DETECO. Este panel es solo para cuentas @deteco.cl autorizadas. Inicia sesión o cambia a una cuenta DETECO y vuelve a comprobar el acceso.';
+        } else if (raw.includes('Usa una cuenta Google del dominio corporativo.')) {
+          message = 'La cuenta activa no pertenece a DETECO y no tiene acceso a este panel. Cambia a una cuenta @deteco.cl autorizada.';
+        } else if (raw.includes('Tu cuenta no tiene acceso de lectura al panel.')) {
+          message = 'Tu cuenta DETECO todavía no tiene acceso al panel. Solicita al administrador que la habilite.';
+        }
+        showMessage(message, 'error');
+        if (message !== raw || raw.includes('Usa una cuenta Google del dominio corporativo.')) {
+          el('access-actions').hidden = false;
+        }
       }
       function showPanel(snapshot) {
         state.snapshot = snapshot;
         el('message').hidden = true;
+        el('access-actions').hidden = true;
         el('panel').hidden = false;
         el('week').textContent = snapshot.week.replace('-', ' · ');
         el('who').textContent = `Sesión autorizada: ${snapshot.adminEmail}`;
@@ -2588,7 +2623,7 @@ var qrcode = function() {
           showPanel(snapshot);
         }).withFailureHandler(error => {
           el('refresh').disabled = false;
-          showMessage(error?.message || 'No se pudo validar el acceso. Inicia sesión con una cuenta autorizada.', 'error');
+          showAccessMessage(error);
         }).app5sAdminState();
       }
       function openDialog(stationId) {
@@ -2601,6 +2636,8 @@ var qrcode = function() {
         el('confirm').disabled = false;
         el('release-dialog').showModal();
       }
+      el('account-switch').href = accountChooserUrl();
+      el('retry-access').addEventListener('click', load);
       el('refresh').addEventListener('click', () => state.view === 'kaizen' ? loadKaizen() : load());
       document.querySelectorAll('.admin-nav [data-view]').forEach(link => link.addEventListener('click', event => {
         event.preventDefault();
