@@ -24,8 +24,17 @@ test('acepta el acuse de Google aunque lo envíe un marco interno de Apps Script
   assert.equal(isTrustedBridgeReceipt(nestedFrameReceipt, { ...expected, source: outerFrame }), true);
 });
 
+test('acepta el subdominio temporal de Google usado por la respuesta real de Apps Script', () => {
+  const temporaryGoogleReceipt = {
+    ...receipt,
+    origin: 'https://n-h2lopvw2mqb2gouortammh5ymzuz5av43zzl23y-0lu-script.googleusercontent.com',
+  };
+  assert.equal(isTrustedBridgeReceipt(temporaryGoogleReceipt, expected), true);
+});
+
 test('descarta mensajes de otra web o de una solicitud antigua', () => {
   assert.equal(isTrustedBridgeReceipt({ ...receipt, origin: 'https://evil.example' }, expected), false);
+  assert.equal(isTrustedBridgeReceipt({ ...receipt, origin: 'https://n-abc-script.googleusercontent.com.evil.example' }, expected), false);
   assert.equal(isTrustedBridgeReceipt({ ...receipt, data: { ...receipt.data, nonce: 'other' } }, expected), false);
   assert.equal(isTrustedBridgeReceipt({ ...receipt, data: { ...receipt.data, requestId: 'old' } }, expected), false);
   assert.equal(isTrustedBridgeReceipt({ ...receipt, data: { ...receipt.data, channel: 'other' } }, expected), false);

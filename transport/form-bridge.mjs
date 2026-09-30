@@ -1,11 +1,13 @@
 const BRIDGE_CHANNEL = 'deteco-5s-bridge-v1';
-const GOOGLE_BRIDGE_ORIGINS = new Set([
-  'https://script.google.com',
-  'https://script.googleusercontent.com',
-]);
+const GOOGLE_BRIDGE_ORIGINS = new Set(['https://script.google.com', 'https://script.googleusercontent.com']);
+
+function isGoogleBridgeOrigin(origin) {
+  return GOOGLE_BRIDGE_ORIGINS.has(origin)
+    || /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/.test(origin);
+}
 
 export function isTrustedBridgeReceipt(event, expected) {
-  if (!event || !expected || !GOOGLE_BRIDGE_ORIGINS.has(event.origin)) return false;
+  if (!event || !expected || !isGoogleBridgeOrigin(event.origin)) return false;
   const data = event.data;
   if (!data || typeof data !== 'object') return false;
   if (data.channel !== BRIDGE_CHANNEL) return false;

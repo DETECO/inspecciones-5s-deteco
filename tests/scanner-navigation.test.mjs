@@ -44,12 +44,11 @@ test('la pantalla de identificación ofrece recuperación si falla o no hay cone
   const identity = appSource.match(/function identityPage\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   const clickHandler = appSource.match(/appElement\.addEventListener\('click',[\s\S]*?\n\}\);/)?.[0] || '';
   const onlineHandler = appSource.match(/window\.addEventListener\('online',[\s\S]*?\n\}\);/)?.[0] || '';
-  assert.match(identity, /data-action="retry-qr-validation"/);
   assert.match(identity, /data-action="rescan-qr"/);
-  assert.match(clickHandler, /retry-qr-validation/);
   assert.match(clickHandler, /rescan-qr/);
-  assert.match(onlineHandler, /qrAccessValidated/,
-    'al volver internet debe revalidar automáticamente la estación');
+  assert.doesNotMatch(clickHandler, /retry-qr-validation/);
+  assert.doesNotMatch(onlineHandler, /initializeApp\(\)/,
+    'al recuperar internet no debe disparar una consulta bloqueante antes de que el inspector inicie');
 });
 
 test('la ruta QR restaurada desde sessionStorage valida estación y token', () => {
@@ -57,4 +56,22 @@ test('la ruta QR restaurada desde sessionStorage valida estación y token', () =
   assert.match(routeReader, /parseQrRoute/);
   assert.match(routeReader, /STATIONS\.some/,
     'la ruta guardada solo puede recuperar una estación conocida');
+});
+
+test('la estación aparece sin una consulta previa al servidor; iniciar realiza la reserva validada', () => {
+  const initializer = appSource.match(/async function initializeApp\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  const start = appSource.match(/async function start\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+
+  assert.ok(initializer.indexOf('render()') >= 0, 'el acceso QR debe dibujar la pantalla enseguida');
+  assert.ok(initializer.indexOf('render()') < initializer.indexOf('await draftLoad()'),
+    'el primer render debe preceder incluso la lectura local del borrador');
+  assert.doesNotMatch(initializer, /readState\(\)/,
+    'no debe esperar una consulta de estado para mostrar la estación');
+  assert.match(start, /sendNow\('reserve'/,
+    'el servidor debe validar el QR y reservar en el mismo paso al iniciar');
+  assert.match(start, /qrValidationPending\s*=\s*true/,
+    'la pantalla debe indicar que está comprobando y reservando durante la petición');
+  const refresh = appSource.match(/async function refreshServerState\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+  assert.match(refresh, /!state\.qrAccessValidated/,
+    'la sincronización periódica no consulta al servidor antes de iniciar');
 });
