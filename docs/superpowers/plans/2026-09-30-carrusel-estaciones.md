@@ -74,5 +74,5 @@
 
 - [x] Ejecutar `node --test tests/*.test.mjs` y revisar el diff completo.
 - [x] Probar la portada en vista móvil; validar la navegación de carrusel y colores de Bodega. El reconocimiento válido/inválido del QR se cubre mediante las pruebas de ruta/flujo; la cámara real requiere la prueba en teléfono.
-- [ ] Publicar a `DETECO/inspecciones-5s-deteco` solo si todo pasa.
-- [ ] Verificar que el commit remoto coincide con `main` y que GitHub Pages sirve HTML/CSS actualizados con respuesta HTTP 200.
+- [x] Publicar a `DETECO/inspecciones-5s-deteco` solo si todo pasa.
+- [x] Verificar que el commit remoto coincide con `main` y que GitHub Pages sirve HTML/CSS actualizados con respuesta HTTP 200.
