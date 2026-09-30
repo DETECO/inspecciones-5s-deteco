@@ -10,6 +10,7 @@ const stylesheet = readFileSync(new URL('../admin-login.css', import.meta.url), 
 
 test('la pantalla de acceso usa la marca DETECO y dirige a Google para autenticar', () => {
   assert.match(html, /assets\/deteco-wordmark\.jpg/);
+  assert.match(html, /admin-login\.css\?v=2/);
   assert.match(html, /Administración 5S/);
   assert.match(html, /Acceso al panel/);
   assert.match(html, /Continuar con Google/);
