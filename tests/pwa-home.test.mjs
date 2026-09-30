@@ -20,19 +20,18 @@ test('declares home-screen metadata and platform-sized DETECO icons', () => {
 test('uses the DETECO landing page with a direct camera-scanner action', () => {
   assert.match(appSource, /class="brand-logo" src="\.\/assets\/deteco-wordmark\.jpg"/);
   assert.match(appSource, /class="welcome-page page-enter"/);
-  assert.match(appSource, /Escanea el QR del área para comenzar\./);
+  assert.match(appSource, /5S SEMANAL/);
+  assert.match(appSource, /Escanea el QR de tu estación\./);
+  assert.match(appSource, /class="welcome-photo" src="\.\/assets\/qr-estacion-hero\.png"/);
   assert.match(appSource, /data-action="open-scanner"[\s\S]*?Escanear QR/);
   assert.match(appSource, /data-action="show-scan-help"[\s\S]*?Ver instrucciones/);
-  assert.match(appSource, /station-carousel/);
+  assert.doesNotMatch(appSource, /station-carousel|station-artwork|HOME_CAROUSEL_STATIONS|station-presentation/);
 });
 
-test('presenta las seis áreas aprobadas sin permitir elegir estación fuera del QR', () => {
+test('la portada es fotográfica y no permite elegir estación fuera del QR', () => {
   const home = appSource.match(/function qrPage\(\) \{[\s\S]*?\n\}/)?.[0] || '';
-  assert.match(appSource, /HOME_CAROUSEL_STATIONS/);
-  assert.match(home, /data-action="previous-station"/);
-  assert.match(home, /data-action="next-station"/);
-  assert.match(home, /data-station-index=/);
-  assert.match(home, /getStationPresentation\(/);
+  assert.match(home, /welcome-photo/);
+  assert.doesNotMatch(home, /<svg|stationArtwork|station-carousel/);
   assert.match(home, /type="button" data-action="open-scanner"/);
   assert.doesNotMatch(home, /data-action="select-station"|data-station-id=/);
 });
@@ -41,12 +40,13 @@ test('mantiene insignia semanal, ayuda, administración y proporciones móviles 
   const header = appSource.match(/function header\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   assert.match(stylesSource, /\.mode-pill\s*\{\s*display:\s*inline-flex/);
   assert.match(header, /aria-label="Administración"/);
-  assert.match(stylesSource, /\.station-carousel/);
+  assert.match(stylesSource, /\.welcome-photo\s*\{/);
+  assert.doesNotMatch(stylesSource, /\.station-carousel|\.station-artwork/);
   assert.match(stylesSource, /prefers-reduced-motion:\s*reduce/);
-  assert.match(stylesSource, /\.station-slide[\s\S]*?focus-visible/);
+  assert.match(stylesSource, /\.scan-cta:focus-visible/);
 });
 
-test('ships the wordmark, QR illustration, and correctly sized home-screen icons', () => {
+test('ships the wordmark, photographic QR hero, and correctly sized home-screen icons', () => {
   for (const name of ['deteco-wordmark.jpg', 'qr-estacion-hero.png', 'deteco-icon-192.png', 'deteco-icon-512.png', 'apple-touch-icon.png', 'favicon-32.png']) {
     assert.ok(existsSync(new URL(`../assets/${name}`, import.meta.url)), `missing asset: ${name}`);
   }

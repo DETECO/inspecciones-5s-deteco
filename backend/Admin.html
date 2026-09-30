@@ -144,17 +144,21 @@
         el('panel').hidden = true;
       }
       function accountChooserUrl() {
+        const protocol = window.location.protocol || 'https:';
+        const slashPair = String.fromCharCode(47, 47);
+        const scriptOrigin = protocol + slashPair + 'script.google.com';
+        const accountsOrigin = protocol + slashPair + 'accounts.google.com';
         const candidates = [window.location.href, document.referrer];
         try { candidates.unshift(window.top.location.href); } catch {}
         for (const candidate of candidates) {
           const deploymentId = String(candidate || '').match(/\/s\/([A-Za-z0-9_-]+)\/exec(?:[/?#]|$)/)?.[1];
           if (deploymentId) {
-            const continuation = `https://script.google.com/a/macros/deteco.cl/s/${deploymentId}/exec`;
-            return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(continuation)}`;
+            const continuation = scriptOrigin + '/a/macros/deteco.cl/s/' + deploymentId + '/exec';
+            return accountsOrigin + '/AccountChooser?continue=' + encodeURIComponent(continuation);
           }
         }
-        const fallback = window.location.href.split('#')[0];
-        return `https://accounts.google.com/AccountChooser?continue=${encodeURIComponent(fallback)}`;
+        const fallback = (document.referrer || window.location.href).split('#')[0];
+        return accountsOrigin + '/AccountChooser?continue=' + encodeURIComponent(fallback);
       }
       function showAccessMessage(error) {
         const raw = String(error?.message || error || 'No se pudo validar el acceso.').replace(/^Exception:\s*/i, '').trim();

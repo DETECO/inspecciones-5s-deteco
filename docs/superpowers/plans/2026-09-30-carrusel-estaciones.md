@@ -1,5 +1,7 @@
 # Portada y transición de estaciones — Implementation Plan
 
+> Estado: el usuario reemplazó el carrusel de este plan por una portada fotográfica. La transición QR aprobada se conserva; el diseño vigente está en `docs/superpowers/specs/2026-09-30-carrusel-estaciones-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Publicar una portada móvil/escritorio con carrusel visual de seis uniformes aprobados y confirmar por animación la estación identificada mediante QR.

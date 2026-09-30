@@ -73,6 +73,9 @@ test('el panel distingue problemas de acceso Google y ofrece cambiar de cuenta o
   assert.match(admin, /id="retry-access"[^>]*>Volver a comprobar acceso/);
   assert.match(admin, /La cuenta activa no pertenece a DETECO y no tiene acceso a este panel/);
   assert.match(admin, /Tu cuenta DETECO todavía no tiene acceso al panel/);
-  assert.match(admin, /accounts\.google\.com\/AccountChooser\?continue=/);
+  assert.match(admin, /const protocol = window\.location\.protocol/);
+  assert.match(admin, /const slashPair = String\.fromCharCode\(47, 47\)/);
+  assert.match(admin, /scriptOrigin \+ '\/a\/macros\/deteco\.cl\/s\/' \+ deploymentId/);
+  assert.match(admin, /accountsOrigin \+ '\/AccountChooser\?continue=' \+ encodeURIComponent/);
   assert.match(admin, /\.app5sAdminState\(\)/);
 });
