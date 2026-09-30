@@ -34,6 +34,6 @@ Files: client/app.mjs, client/final-submit.mjs, index.html, tests/final-submit.t
 - [x] Invalidar caché de app y módulo nuevo en index/imports; ejecutar pruebas UI. 20 pruebas enfocadas aprobadas; revisión independiente y recorrido local de 25 preguntas completados.
 
 ## Task 3: revisión y publicación
-- [ ] Suite completa, compilación deploy, comparación de diffs y revisión independiente.
+- [x] Suite completa: 163 aprobadas; bundle compilado y sintaxis válida; diffs comprobados. Revisión independiente frontend aprobada. Backend validado mediante pruebas unitarias e integración con datos en memoria.
 - [x] Subir únicamente proyecto Apps Script autorizado con clasp; actualizar deployment existente sin cambiar URL y sin ejecutar instalación ni reserva real. Activada versión 6.
-- [ ] Publicar GitHub; comprobar SHA y archivos live. Comprobar carga navegador sin crear inspección real. Informar límites de pruebas.
+- [x] Publicar GitHub: commit `49c1db68d4ae08b9a4f5e1342a22679deb3cdca9`, Pages completado con éxito. Index/app/final-submit públicos coinciden con los archivos locales; navegador carga sin errores. No se creó inspección real.
