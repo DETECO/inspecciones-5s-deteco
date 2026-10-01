@@ -50,28 +50,29 @@
     .kaizen-filter{display:grid;gap:6px}.kaizen-filter label{color:var(--charcoal);font-size:12px;font-weight:850}.kaizen-filter select{width:100%;min-height:42px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;color:var(--ink);background:#fff;font:inherit}
     .kaizen-list{display:grid;gap:12px}.kaizen-card{padding:17px;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:0 4px 14px #4947410b}.kaizen-heading{display:flex;align-items:start;justify-content:space-between;gap:12px}.kaizen-heading h2{margin:0;color:var(--charcoal);font-size:16px;line-height:1.4}.kaizen-card p{margin:7px 0;color:var(--muted);font-size:13px;line-height:1.5}.kaizen-meta{display:flex;flex-wrap:wrap;gap:7px 14px;margin-top:8px;color:var(--muted);font-size:12px}.kaizen-evidence{display:grid;gap:8px;margin-top:13px}.kaizen-evidence-item{padding:11px;border-radius:8px;background:#f7f6f3}.kaizen-evidence-item strong{color:var(--charcoal);font-size:12px}.kaizen-photo{min-height:34px;padding:0 10px;border:1px solid var(--orange);border-radius:7px;color:#b74413;background:#fff;font-size:12px;font-weight:800}.kaizen-photo:hover{background:var(--orange-pale)}.kaizen-empty{padding:24px;border:1px dashed var(--line);border-radius:10px;color:var(--muted);background:#fff;text-align:center;font-size:13px;line-height:1.5}.kaizen-warning{margin-bottom:13px}.photo-dialog{width:min(92vw,760px)}.photo-dialog img{display:block;max-width:100%;max-height:70vh;margin:0 auto;border-radius:8px}.photo-dialog .buttons{justify-content:center}
     @media(max-width:520px){.kaizen-toolbar{grid-template-columns:1fr;padding:13px}.kaizen-card{padding:14px}.kaizen-heading{flex-direction:column}}
+    [hidden]{display:none!important}.topbar-actions{display:flex;align-items:center;gap:15px}.back-scan{display:inline-flex;align-items:center;min-height:44px;color:var(--charcoal);font-size:13px;font-weight:750;text-decoration:none}.back-scan:hover{text-decoration:underline}.admin-nav{flex-wrap:wrap}.settings-card{max-width:900px;padding:22px;border:1px solid var(--line);border-radius:13px;background:#fff}.settings-card h2{margin:0 0 10px;font-size:22px}.settings-card h3{margin:24px 0 5px;font-size:16px}.settings-card p{color:var(--muted);font-size:13px;line-height:1.6}.settings-card input,.settings-card textarea,.owner-input{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:white;color:var(--ink)}.settings-card input[type=checkbox]{width:18px;height:18px;accent-color:var(--orange);padding:0;flex:none}.schedule-head,.schedule-row{display:grid;grid-template-columns:1.1fr repeat(3,1fr);align-items:center;gap:12px}.schedule-head{margin:22px 0 8px;color:var(--muted);font-size:12px}.schedule-row{padding:12px 0;border-top:1px solid var(--line)}.day-toggle,.setting-toggle{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:700}.time-field input{width:100%;min-height:44px;font-size:14px}.time-field span{display:none}.setting-toggle{margin:20px 0 12px}.setting-hour{max-width:180px}.settings-card .field textarea{min-height:65px}.settings-save{margin-top:22px}.settings-error{border-left-color:var(--red);color:var(--red);background:var(--red-pale)}.settings-success{border-left-color:var(--green);color:var(--green);background:var(--green-pale)}.owner-input{width:100%;min-height:44px}.settings-card .notice{margin-top:18px}
+    @media(max-width:520px){.admin-topbar{flex-wrap:wrap;padding-top:6px;padding-bottom:6px;gap:2px 12px}.topbar-actions{gap:8px;flex-wrap:wrap}.back-scan{font-size:12px}.settings-card{padding:16px}.schedule-head{display:none}.schedule-row{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.day-toggle{grid-column:1/-1}.time-field span{display:block;margin-bottom:5px;font-size:11px;color:var(--muted)}.time-field input{font-size:13px;padding:7px 4px}.admin-nav a{min-height:44px}}
   </style>
 </head>
 <body>
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Navegación 5S">
       <a class="admin-brand" href="https://deteco.github.io/inspecciones-5s-deteco/" aria-label="Ir a Inspección 5S DETECO"><img class="brand-logo" src="https://deteco.github.io/inspecciones-5s-deteco/assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></a>
-      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" data-view="stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="#kaizen" data-view="kaizen"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan-eye.svg" alt="">Kaizen</a><a href="https://deteco.github.io/inspecciones-5s-deteco/"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan.svg" alt="">Inspección 5S</a></nav>
+      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" data-view="stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="#kaizen" data-view="kaizen"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan-eye.svg" alt="">Kaizen</a><a href="#schedule" data-view="schedule" hidden>Horarios</a><a href="#notifications" data-view="notifications" hidden>Correos</a></nav>
       <div class="admin-sidebar-foot">DETECO · Control semanal de estaciones</div>
     </aside>
     <div class="admin-workspace">
-      <header class="admin-topbar"><div class="admin-breadcrumb"><strong>5S</strong><span>/</span><span>Administración</span></div><div id="week" class="week">Conectando…</div></header>
+      <header class="admin-topbar"><div class="admin-breadcrumb"><strong>5S</strong><span>/</span><span>Administración</span></div><div class="topbar-actions"><a class="back-scan" href="https://deteco.github.io/inspecciones-5s-deteco/">← Volver al escáner</a><div id="week" class="week">Conectando…</div></div></header>
       <section class="admin-intro"><h1 id="page-title">Control de estaciones</h1><p id="page-description">Administra las obras, los códigos QR y las reservas de inspección.</p></section>
       <main>
     <div id="message" class="message loading" role="status">Verificando tu cuenta y cargando las estaciones…</div>
     <div id="access-actions" class="access-actions" hidden>
-      <a id="account-switch" href="#" target="_top">Iniciar o cambiar cuenta</a>
+      <a id="account-switch" href="__APP5S_ADMIN_ACCOUNT_URL__" target="_top">Iniciar o cambiar cuenta</a>
       <button id="retry-access" type="button">Volver a comprobar acceso</button>
     </div>
     <section id="panel" hidden>
       <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
       <div id="action-notice" class="notice" hidden role="status"></div>
-      <div id="release-notice" class="notice">La liberación conserva respuestas y fotos ya sincronizadas. Lo que siga guardado únicamente en el teléfono desconectado no estará disponible aquí y ese teléfono perderá el permiso para sincronizar como editor.</div>
       <section id="stations-view">
       <section id="add-work" class="add-work" hidden aria-labelledby="add-work-title">
         <h2 id="add-work-title">Agregar una obra</h2>
@@ -92,6 +93,7 @@
         <div id="kaizen-message" class="message loading" role="status" hidden></div>
         <div id="kaizen-results" class="kaizen-list"></div>
       </section>
+      <section id="settings-view" hidden aria-label="Configuración administrativa"></section>
     </section>
       </main>
     </div>
@@ -100,12 +102,13 @@
     <div class="dialog-head"><h2 id="dialog-title">Liberar estación</h2></div>
     <form id="release-form" class="dialog-body">
       <p id="dialog-station" class="small"></p>
-      <div class="warning">Confirma solo si el teléfono actual no puede volver a conectarse. Los cambios que no alcanzaron a sincronizarse podrían perderse al continuar desde otro equipo.</div>
+      <div class="warning">Las respuestas no enviadas no se recuperan. Al liberar la reserva, una nueva inspección empieza de cero. Los registros ya cerrados no cambian.</div>
       <div class="field"><label for="reason">Motivo (opcional)</label><textarea id="reason" maxlength="500" placeholder="Si quieres, agrega un contexto breve."></textarea></div>
       <p id="form-error" class="small" role="alert" hidden></p>
       <div class="buttons"><button id="cancel" class="cancel" type="button">Cancelar</button><button id="confirm" class="confirm" type="submit">Confirmar liberación</button></div>
     </form>
   </dialog>
+  <dialog id="owner-dialog" aria-labelledby="owner-title"><div class="dialog-head"><h2 id="owner-title">Encargado del área</h2></div><form id="owner-form" class="dialog-body"><p id="owner-station"></p><label class="field">Nombre del encargado<input id="owner-name" class="owner-input" type="text" maxlength="100" autocomplete="name"></label><p class="count">Déjalo vacío para quitar la asignación. Se aplica a registros futuros; no cambia responsables históricos.</p><p id="owner-error" role="alert" hidden></p><div class="buttons"><button id="owner-cancel" class="cancel" type="button">Cancelar</button><button id="owner-save" class="confirm" type="submit">Guardar encargado</button></div></form></dialog>
   <dialog id="qr-dialog" class="qr-dialog" aria-labelledby="qr-dialog-title">
     <div class="dialog-head"><h2 id="qr-dialog-title">QR de estación</h2></div>
     <div class="dialog-body qr-dialog-body">
@@ -2420,8 +2423,116 @@ var qrcode = function() {
 }));
   </script>
   <script>
+    /* Configuración privada: se consulta únicamente al abrir su sección. */
+(() => {
+  const el = id => document.getElementById(id);
+  const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  const labels = {Mon:'Lunes',Tue:'Martes',Wed:'Miércoles',Thu:'Jueves',Fri:'Viernes',Sat:'Sábado',Sun:'Domingo'};
+  let generation = 0;
+  let currentView = '';
+  let currentSnapshot = null;
+  let unlockControls = () => {};
+  function call(method, payload, success, failure) {
+    const runner = google.script.run.withSuccessHandler(success).withFailureHandler(failure);
+    if (payload === undefined) runner[method]();
+    else runner[method](payload);
+  }
+  function errorText(error) { return String(error?.message || error || 'No se pudo guardar. Inténtalo nuevamente.').replace(/^Exception:\s*/, ''); }
+  function message(text, error = false) {
+    const box = el('settings-result');
+    if (!box) return;
+    box.className = error ? 'notice settings-error' : 'notice settings-success';
+    box.textContent = text;
+    box.hidden = false;
+  }
+  function confirmSave(text, action) {
+    const controls = [...el('settings-view').querySelectorAll('input,textarea')].map(input => ({input,disabled:input.disabled}));
+    controls.forEach(({input}) => {input.disabled = true;});
+    unlockControls = () => {controls.forEach(({input,disabled}) => {input.disabled = disabled;});};
+    const box = el('settings-result');
+    box.className = 'notice';
+    box.innerHTML = '<p>' + escapeHtml(text) + '</p><div class="buttons"><button id="settings-cancel-confirm" class="cancel" type="button">Cancelar</button><button id="settings-confirm" class="confirm" type="button">Confirmar cambios</button></div>';
+    box.hidden = false;
+    el('settings-save').disabled = true;
+    el('settings-cancel-confirm').addEventListener('click', () => { unlockControls();box.hidden = true;el('settings-save').disabled = false; });
+    el('settings-confirm').addEventListener('click', () => { el('settings-confirm').disabled = true;el('settings-save').disabled = false;box.hidden = true;action(); });
+    box.scrollIntoView({block:'nearest'});
+  }
+  function show(view, snapshot) {
+    currentView = view;
+    currentSnapshot = snapshot;
+    const request = ++generation;
+    const container = el('settings-view');
+    if (!snapshot?.permissions?.canConfigure) { container.textContent = 'Tu cuenta no tiene permiso para cambiar esta configuración.'; return; }
+    container.innerHTML = '<div class="message loading" role="status">Cargando configuración…</div>';
+    const method = view === 'schedule' ? 'app5sAdminSettings' : 'app5sAdminNotificationSettings';
+    call(method, undefined, result => {
+      if (request !== generation) return;
+      if (view === 'schedule') renderSchedule(result);
+      else renderNotifications(result);
+    }, error => {
+      if (request !== generation) return;
+      container.innerHTML = '<div class="message error" role="alert">' + escapeHtml(errorText(error)) + '</div><button id="retry-settings" class="cancel" type="button">Reintentar</button>';
+      el('retry-settings').addEventListener('click', () => show(view, snapshot));
+    });
+  }
+  function renderSchedule(result) {
+    el('settings-view').innerHTML = `<section class="settings-card"><h2>Días y horarios habilitados</h2><p>Zona horaria: <strong>America/Santiago</strong>. Solo afectan las inspecciones nuevas; una inspección ya iniciada conserva su horario de cierre. No se permiten franjas que crucen medianoche ni otra semana ISO.</p><form id="schedule-form"><div class="schedule-head"><span>Día</span><span>Desde</span><span>Último inicio</span><span>Cierre</span></div>${result.schedule.days.map(day => `<div class="schedule-row" data-day="${escapeHtml(day.day)}"><label class="day-toggle"><input type="checkbox" name="enabled" ${day.enabled ? 'checked' : ''}> ${labels[day.day]}</label>${['start','lastStart','end'].map(field => `<label class="time-field"><span>${{start:'Desde',lastStart:'Último inicio',end:'Cierre'}[field]}</span><input type="time" name="${field}" value="${escapeHtml(day[field])}" aria-label="${labels[day.day]}: ${{start:'desde',lastStart:'último inicio',end:'cierre'}[field]}" required ${day.enabled ? '' : 'disabled'}></label>`).join('')}</div>`).join('')}<div id="settings-result" class="notice" role="status" hidden></div><div class="settings-save"><button id="settings-save" class="confirm" type="submit">Guardar horarios</button></div></form></section>`;
+    el('schedule-form').querySelectorAll('[name="enabled"]').forEach(input => input.addEventListener('change', () => {
+      input.closest('.schedule-row').querySelectorAll('input[type="time"]').forEach(time => { time.disabled = !input.checked; });
+    }));
+    el('schedule-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const days = [...el('schedule-form').querySelectorAll('[data-day]')].map(row => ({day:row.dataset.day,enabled:row.querySelector('[name="enabled"]').checked,...Object.fromEntries(['start','lastStart','end'].map(field => [field,row.querySelector('[name="' + field + '"]').value]))}));
+      if (!days.some(day => day.enabled) || days.some(day => day.enabled && (!day.start || !day.lastStart || !day.end || day.start >= day.lastStart || day.lastStart > day.end))) { message('Habilita al menos un día y revisa los límites: desde < último inicio ≤ cierre.', true); return; }
+      confirmSave('¿Guardar estos horarios para las inspecciones nuevas? Las inspecciones ya iniciadas no cambian.', () => save('app5sAdminSaveSchedule', {schedule:{days}}, result => { renderSchedule(result); message('Horarios guardados. Se aplicarán al iniciar nuevas inspecciones.'); }));
+    });
+  }
+  function renderNotifications(result) {
+    const config = result.config;
+    const stations = currentSnapshot.stations || [];
+    const recipientList = values => escapeHtml((values || []).join(', '));
+    const authorization = result.authorizationRequired ? '<div class="notice">Falta autorizar el envío en Google. El propietario debe ejecutar <strong>autorizarAvisosApp5S</strong> en Apps Script y aceptar los permisos. Guardar destinatarios no envía correos de prueba.</div>' : '';
+    el('settings-view').innerHTML = `<section class="settings-card"><h2>Destinatarios y programación</h2><p>Los avisos están deshabilitados hasta que los actives. Los envíos se realizan individualmente, sin mostrar la lista de destinatarios. Horario de Chile (America/Santiago).</p>${authorization}<form id="notifications-form"><label class="setting-toggle"><input id="weekly-enabled" type="checkbox" ${config.weeklyEnabled ? 'checked' : ''}> Enviar resumen semanal los viernes</label><label class="field setting-hour">Hora del viernes<input id="weekly-hour" type="number" min="0" max="23" step="1" required value="${config.weeklyHour}"></label><p class="settings-help">Google programa el envío dentro de la hora seleccionada, no en un minuto exacto. Si aún hay horarios habilitados después del envío, el resumen se identifica como parcial.</p><label class="setting-toggle"><input id="closed-enabled" type="checkbox" ${config.closedEnabled ? 'checked' : ''}> Avisar cuando se cierre una inspección</label><label class="field">Destinatarios generales<textarea id="general-recipients" rows="2" placeholder="nombre@deteco.cl, otro@deteco.cl">${recipientList(config.generalRecipients)}</textarea></label><p class="settings-help">Separa los correos con coma, punto y coma o salto de línea. Máximo 50 destinatarios distintos. Los destinatarios por estación reciben únicamente la información de esas estaciones.</p><h3>Destinatarios por estación</h3>${stations.map(station => `<label class="field">${escapeHtml(station.stationName)}<textarea rows="2" data-station-recipients="${escapeHtml(station.stationId)}" placeholder="Opcional">${recipientList(config.stationRecipients?.[station.stationId])}</textarea></label>`).join('')}<div id="settings-result" class="notice" role="status" hidden></div><div class="settings-save"><button id="settings-save" class="confirm" type="submit">Guardar avisos</button></div></form><p class="settings-help" id="notifications-status"></p></section>`;
+    el('notifications-status').textContent = result.lastStatus ? 'Estado de envíos: ' + (typeof result.lastStatus === 'string' ? result.lastStatus : JSON.stringify(result.lastStatus)) : 'Todavía no hay envíos registrados.';
+    const processing = document.createElement('p');
+    processing.className = 'settings-help';
+    processing.textContent = 'El aviso de cierre se procesa en la siguiente revisión automática (aproximadamente cada 5 minutos), sin retrasar el guardado de la inspección.';
+    el('notifications-form').before(processing);
+    const recipients = text => [...new Set(text.split(/[,;\n]+/).map(value => value.trim().toLowerCase()).filter(Boolean))];
+    el('notifications-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const generalRecipients = recipients(el('general-recipients').value);
+      const stationRecipients = Object.fromEntries([...el('notifications-form').querySelectorAll('[data-station-recipients]')].map(input => [input.dataset.stationRecipients, recipients(input.value)]));
+      const addresses = [...new Set([...generalRecipients, ...Object.values(stationRecipients).flat()])];
+      if (addresses.length > 50 || addresses.some(value => !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value))) { message('Revisa los correos: deben ser direcciones válidas, sin espacios, con un máximo de 50 destinatarios distintos.', true); return; }
+      const nextConfig = {weeklyEnabled:el('weekly-enabled').checked,closedEnabled:el('closed-enabled').checked,weeklyHour:Number(el('weekly-hour').value),generalRecipients,stationRecipients};
+      if ((nextConfig.weeklyEnabled || nextConfig.closedEnabled) && !addresses.length) { message('Agrega al menos un destinatario antes de activar avisos.', true); return; }
+      confirmSave('¿Guardar estos destinatarios y opciones? Si activas los avisos, se enviarán correos reales según esta configuración.', () => save('app5sAdminSaveNotifications', {config:nextConfig}, result => { renderNotifications(result); message(result.authorizationRequired ? 'Configuración guardada. Falta la autorización de Google del propietario para activar los envíos.' : 'Configuración de avisos guardada. No se envió ningún correo de prueba.'); }));
+    });
+  }
+  function save(method, payload, done) {
+    const button = el('settings-save');
+    if (button.disabled) return;
+    const request = generation;
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Guardando…';
+    call(method, payload, result => {
+      if (request !== generation) return;
+      done(result);
+    }, error => {
+      if (request !== generation) return;
+      unlockControls();
+      button.disabled = false;
+      button.textContent = label;
+      message(errorText(error), true);
+    });
+  }
+  window.app5sAdminConfig = {show, hide(){generation++;currentView='';}, refresh(){if(currentView)show(currentView,currentSnapshot);}};
+})();
     (() => {
-      const state = { snapshot: null, selected: null, qrStation: null, qrSvg: '', busy: false, creatingWork: false, view: location.hash === '#kaizen' ? 'kaizen' : 'stations', kaizen: null };
+      const state = { snapshot: null, selected: null, selectedOwner: null, qrStation: null, qrSvg: '', busy: false, creatingWork: false, view: ['kaizen','schedule','notifications'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'stations', kaizen: null };
       const el = id => document.getElementById(id);
       const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const formatDate = value => {
@@ -2431,6 +2542,7 @@ var qrcode = function() {
       };
       const statusLabel = status => ({new:'Sin iniciar',open:'En progreso',closed:'Cerrada',expired:'Cerrada incompleta'})[status] || 'Estado desconocido';
       const kaizenStatusLabel = status => status === 'closed' ? 'Cerrado' : 'Pendiente';
+      let loadGeneration = 0;
       function showMessage(text, type = '') {
         const message = el('message');
         message.className = `message ${type}`;
@@ -2444,6 +2556,8 @@ var qrcode = function() {
         const slashPair = String.fromCharCode(47, 47);
         const scriptOrigin = protocol + slashPair + 'script.google.com';
         const accountsOrigin = protocol + slashPair + 'accounts.google.com';
+        const serverUrl = el('account-switch').getAttribute('href') || '';
+        if (serverUrl.startsWith(accountsOrigin + '/AccountChooser?continue=')) return serverUrl;
         const candidates = [window.location.href, document.referrer];
         try { candidates.unshift(window.top.location.href); } catch {}
         for (const candidate of candidates) {
@@ -2453,8 +2567,7 @@ var qrcode = function() {
             return accountsOrigin + '/AccountChooser?continue=' + encodeURIComponent(continuation);
           }
         }
-        const fallback = (document.referrer || window.location.href).split('#')[0];
-        return accountsOrigin + '/AccountChooser?continue=' + encodeURIComponent(fallback);
+        return protocol + slashPair + 'deteco.github.io/inspecciones-5s-deteco/admin-login.html';
       }
       function showAccessMessage(error) {
         const raw = String(error?.message || error || 'No se pudo validar el acceso.').replace(/^Exception:\s*/i, '').trim();
@@ -2467,6 +2580,7 @@ var qrcode = function() {
           message = 'Tu cuenta DETECO todavía no tiene acceso al panel. Solicita al administrador que la habilite.';
         }
         showMessage(message, 'error');
+        el('week').textContent = 'Sin acceso';
         if (message !== raw || raw.includes('Usa una cuenta Google del dominio corporativo.')) {
           el('access-actions').hidden = false;
         }
@@ -2479,7 +2593,7 @@ var qrcode = function() {
         el('week').textContent = snapshot.week.replace('-', ' · ');
         el('who').textContent = `Sesión autorizada: ${snapshot.adminEmail}`;
         el('action-notice').hidden = true;
-        el('release-notice').hidden = !snapshot.permissions?.canRelease;
+        document.querySelectorAll('[data-view="schedule"],[data-view="notifications"]').forEach(link => { link.hidden = !snapshot.permissions?.canConfigure; });
         el('add-work').hidden = !snapshot.permissions?.canConfigure;
         const previousStation = el('kaizen-stations').value || 'all';
         el('kaizen-stations').innerHTML = '<option value="all">Todas las estaciones</option>' + snapshot.stations.map(station => `<option value="${escapeHtml(station.stationId)}">${escapeHtml(station.stationName)}</option>`).join('');
@@ -2496,12 +2610,21 @@ var qrcode = function() {
           const qrAction = snapshot.permissions?.canConfigure && station.qrUrl
             ? `<button class="copy-link qr-copy" type="button" data-qr="${escapeHtml(station.stationId)}">Ver / imprimir QR</button>`
             : '';
-          return `<article class="station"><div class="station-top"><h2>${escapeHtml(station.stationName)}</h2><span class="state ${escapeHtml(station.status)}">${escapeHtml(statusLabel(station.status))}</span></div><div class="details">${details}</div><div class="station-actions">${action}${qrAction}</div></article>`;
+          const ownerAction = snapshot.permissions?.canConfigure ? `<button class="cancel qr-copy" type="button" data-owner="${escapeHtml(station.stationId)}">Editar encargado</button>` : '';
+          return `<article class="station"><div class="station-top"><h2>${escapeHtml(station.stationName)}</h2><span class="state ${escapeHtml(station.status)}">${escapeHtml(statusLabel(station.status))}</span></div><div class="details"><div>Encargado del área: <strong>${escapeHtml(station.owner || 'Sin asignar')}</strong></div>${details}</div><div class="station-actions">${qrAction}${ownerAction}${action}</div></article>`;
         }).join('');
         el('stations').querySelectorAll('[data-station]').forEach(button => button.addEventListener('click', () => openDialog(button.dataset.station)));
         el('stations').querySelectorAll('[data-qr]').forEach(button => button.addEventListener('click', () => {
           const station = state.snapshot?.stations.find(item => item.stationId === button.dataset.qr);
           openQrDialog(station);
+        }));
+        el('stations').querySelectorAll('[data-owner]').forEach(button => button.addEventListener('click', () => {
+          state.selectedOwner = state.snapshot.stations.find(station => station.stationId === button.dataset.owner);
+          el('owner-station').textContent = state.selectedOwner.stationName;
+          el('owner-name').value = state.selectedOwner.owner || '';
+          el('owner-save').disabled = false;
+          el('owner-error').hidden = true;
+          el('owner-dialog').showModal();
         }));
       }
       function openQrDialog(station) {
@@ -2521,20 +2644,25 @@ var qrcode = function() {
         el('qr-dialog').showModal();
       }
       function setView(view) {
-        state.view = view === 'kaizen' ? 'kaizen' : 'stations';
+        const settings = view === 'schedule' || view === 'notifications';
+        state.view = settings && !state.snapshot?.permissions?.canConfigure ? 'stations' : ['stations','kaizen','schedule','notifications'].includes(view) ? view : 'stations';
         el('stations-view').hidden = state.view !== 'stations';
         el('kaizen-view').hidden = state.view !== 'kaizen';
+        const showSettings = state.view === 'schedule' || state.view === 'notifications';
+        el('settings-view').hidden = !showSettings;
+        if (showSettings && state.snapshot) window.app5sAdminConfig.show(state.view, state.snapshot);
+        else window.app5sAdminConfig.hide();
         document.querySelectorAll('.admin-nav [data-view]').forEach(link => {
           const active = link.dataset.view === state.view;
           link.classList.toggle('active', active);
           if (active) link.setAttribute('aria-current', 'page');
           else link.removeAttribute('aria-current');
         });
-        el('page-title').textContent = state.view === 'kaizen' ? 'Seguimiento de Kaizen' : 'Control de estaciones';
-        el('page-description').textContent = state.view === 'kaizen'
-          ? 'Consulta hallazgos, responsables, evidencias y cierres por estación.'
-          : 'Administra las obras, los códigos QR y las reservas de inspección.';
-        el('refresh').textContent = state.view === 'kaizen' ? 'Actualizar Kaizen' : 'Actualizar estados';
+        const titles = {stations:'Control de estaciones',kaizen:'Seguimiento de Kaizen',schedule:'Horarios de inspección',notifications:'Avisos por correo'};
+        const descriptions = {stations:'Administra las obras, los códigos QR y los encargados de cada estación.',kaizen:'Consulta hallazgos, responsables, evidencias y cierres por estación.',schedule:'Define los días y horarios habilitados para iniciar y cerrar inspecciones.',notifications:'Configura destinatarios, resúmenes semanales y avisos de cierre.'};
+        el('page-title').textContent = titles[state.view];
+        el('page-description').textContent = descriptions[state.view];
+        el('refresh').textContent = showSettings ? 'Actualizar configuración' : state.view === 'kaizen' ? 'Actualizar Kaizen' : 'Actualizar estados';
         if (state.view === 'kaizen' && state.snapshot) loadKaizen();
       }
       function renderKaizen(result) {
@@ -2620,12 +2748,24 @@ var qrcode = function() {
         window.setTimeout(() => URL.revokeObjectURL(url), 1500);
       }
       function load() {
+        const request = ++loadGeneration;
         el('refresh').disabled = true;
         if (!state.snapshot) showMessage('Verificando tu cuenta y cargando las estaciones…', 'loading');
+        const timer = window.setTimeout(() => {
+          if (request !== loadGeneration) return;
+          loadGeneration++;
+          el('refresh').disabled = false;
+          showMessage('Google no respondió a tiempo. Vuelve a comprobar el acceso; no se modificaron datos.', 'error');
+          el('access-actions').hidden = false;
+        }, 20000);
         google.script.run.withSuccessHandler(snapshot => {
+          window.clearTimeout(timer);
+          if (request !== loadGeneration) return;
           el('refresh').disabled = false;
           showPanel(snapshot);
         }).withFailureHandler(error => {
+          window.clearTimeout(timer);
+          if (request !== loadGeneration) return;
           el('refresh').disabled = false;
           showAccessMessage(error);
         }).app5sAdminState();
@@ -2642,7 +2782,25 @@ var qrcode = function() {
       }
       el('account-switch').href = accountChooserUrl();
       el('retry-access').addEventListener('click', load);
-      el('refresh').addEventListener('click', () => state.view === 'kaizen' ? loadKaizen() : load());
+      el('refresh').addEventListener('click', () => state.view === 'kaizen' ? loadKaizen() : ['schedule','notifications'].includes(state.view) ? window.app5sAdminConfig.refresh() : load());
+      el('owner-cancel').addEventListener('click', () => el('owner-dialog').close());
+      el('owner-form').addEventListener('submit', event => {
+        event.preventDefault();
+        if (el('owner-save').disabled || !state.selectedOwner) return;
+        const station = state.selectedOwner;
+        const owner = el('owner-name').value.trim();
+        el('owner-save').disabled = true;
+        google.script.run.withSuccessHandler(snapshot => {
+          el('owner-dialog').close();
+          showPanel(snapshot);
+          el('action-notice').textContent = 'Encargado actualizado para registros futuros.';
+          el('action-notice').hidden = false;
+        }).withFailureHandler(error => {
+          el('owner-save').disabled = false;
+          el('owner-error').textContent = error?.message || 'No se pudo guardar el encargado.';
+          el('owner-error').hidden = false;
+        }).app5sAdminUpdateOwner({stationId:station.stationId,owner,expectedOwner:station.owner || ''});
+      });
       document.querySelectorAll('.admin-nav [data-view]').forEach(link => link.addEventListener('click', event => {
         event.preventDefault();
         setView(link.dataset.view);
@@ -2737,7 +2895,7 @@ var qrcode = function() {
           el('confirm').textContent = 'Confirmar liberación';
           el('release-dialog').close();
           showPanel(snapshot);
-          el('action-notice').textContent = `Estación ${station.stationName} liberada. Los datos sincronizados se conservaron.`;
+          el('action-notice').textContent = `Estación ${station.stationName} liberada. Puedes iniciar una nueva inspección; los registros cerrados no cambian.`;
           el('action-notice').hidden = false;
           el('action-notice').style.borderLeftColor = 'var(--green)';
           el('action-notice').style.background = 'var(--green-pale)';

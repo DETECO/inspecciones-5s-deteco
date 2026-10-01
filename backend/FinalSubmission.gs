@@ -49,6 +49,7 @@ function app5sFinalPrune_(week) {
 
 function app5sFinalState_(stationId, week, lease) {
   const state = createInspection({ stationId, week, pendingKaizen: app5sLoadPendingKaizen_(stationId) });
+  state.schedule = lease?.schedule || (typeof app5sScheduleConfig_ === 'function' ? app5sScheduleConfig_() : DEFAULT_INSPECTION_SCHEDULE);
   return lease ? reserveInspection(state, { clientId: lease.clientId, inspectorName: lease.inspectorName, at: lease.startedAt }) : state;
 }
 
@@ -77,7 +78,7 @@ function app5sFinalPhotos_(lease) {
 function app5sFinalSnapshot_(lease, payload, now) {
   const at = new Date(payload.occurredAt);
   if (!Number.isFinite(at.getTime()) || at > now || at < new Date(lease.startedAt) || isoWeekChile(at).key !== lease.week) throw new Error('La hora de cierre no corresponde a esta inspección.');
-  const windowState = inspectionWindow(at, true);
+  const windowState = inspectionWindow(now, true, lease.schedule || DEFAULT_INSPECTION_SCHEDULE);
   if (windowState === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
   const answers = payload.answers;
   const questions = inspectionQuestions(payload);
@@ -122,6 +123,7 @@ function app5sFinalSnapshot_(lease, payload, now) {
 function app5sFinalFinish_(state) {
   if (state.finalMaterialized === true) {
     app5sFinalRelease_(state.stationId, state.week);
+    if (typeof app5sNotifyClosedSafe_ === 'function') app5sNotifyClosedSafe_(state);
     return;
   }
   app5sMaterializeClosed_(state);
@@ -130,6 +132,7 @@ function app5sFinalFinish_(state) {
   state.finalMaterialized = true;
   app5sSaveState_(state);
   app5sFinalRelease_(state.stationId, state.week);
+  if (typeof app5sNotifyClosedSafe_ === 'function') app5sNotifyClosedSafe_(state);
 }
 
 function app5sFinalHandle_(operation, payload, stationId, meta) {
@@ -153,13 +156,14 @@ function app5sFinalHandle_(operation, payload, stationId, meta) {
     throw new Error('La inspección de esta semana ya está cerrada.');
   }
   if (operation === 'begin-final') {
-    if (inspectionWindow(now, false) !== 'open') throw new Error('No se puede iniciar una inspección fuera del horario permitido.');
+    const schedule = typeof app5sScheduleConfig_ === 'function' ? app5sScheduleConfig_() : DEFAULT_INSPECTION_SCHEDULE;
+    if ((!lease || lease.sessionId !== sessionId) && inspectionWindow(now, false, schedule) !== 'open') throw new Error('No se puede iniciar una inspección fuera del horario permitido.');
     if (lease && lease.clientId !== clientId || !lease && stored?.editor && stored.editor.clientId !== clientId) throw new Error('La estación tiene una reserva activa. Solicita su liberación al administrador.');
     if (!lease || lease.sessionId !== sessionId) {
       app5sFinalPrune_(week);
       if (lease) app5sFinalClearPhotos_(lease);
       const state = reserveInspection(createInspection({ stationId, week }), { clientId, inspectorName: payload.inspectorName, at: now.toISOString() });
-      lease = { stationId, week, clientId, sessionId, inspectorName: state.startedBy, startedAt: state.startedAt };
+      lease = { stationId, week, clientId, sessionId, inspectorName: state.startedBy, startedAt: state.startedAt, schedule };
       PropertiesService.getScriptProperties().setProperty(app5sFinalLeaseKey_(stationId, week), JSON.stringify(lease));
     }
     return app5sFinalReply_(app5sFinalState_(stationId, week, lease), stationId, meta);

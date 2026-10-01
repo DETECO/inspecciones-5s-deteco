@@ -18,6 +18,7 @@ Ampliar la app existente, sin sustituir la autenticación, el Sheet o el backend
 Conservar foto, logo y colores aprobados. Sustituir el engranaje por un icono de interfaz centrado y legible, con control táctil de al menos 44 px. La portada usa el alto disponible del navegador y reduce primero la fotografía y márgenes para que Escanear QR y Ver instrucciones sean visibles sin desplazamiento en teléfonos habituales. No ocultar controles con overflow ni impedir el desplazamiento cuando el usuario aumenta el texto por accesibilidad. Las instrucciones siguen en un diálogo.
 
 ## Administración
+Quitar el enlace lateral “Inspección 5S” y agregar “← Volver al escáner” en la barra superior. Es navegación hacia la app, no cierre de sesión de Google. Las confirmaciones nuevas permanecen dentro del panel, sin ventanas nativas sobre el chat.
 Eliminar el aviso permanente obsoleto. La advertencia solo aparece al liberar una reserva activa: explica que las respuestas aún no enviadas no se recuperan ni se retoman y que una nueva inspección empieza de cero. No borrar registros históricos ni liberar estaciones automáticamente.
 
 Agrupar las lecturas de Estado y Accesos, abrir el libro una vez por ejecución y mantener las comprobaciones de cuenta y permisos en el servidor. No usar datos privados en cachés públicas ni prometer un tiempo fijo de respuesta de Google.

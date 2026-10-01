@@ -344,3 +344,28 @@ h3 { margin-bottom: 6px; color: var(--charcoal); font-size: 15px; }
 @media (prefers-reduced-motion: reduce) {
   .station-loader-arc { animation: none; border-right-color: var(--orange); }
 }
+
+/* Inicio: la fotografía usa el espacio que dejan el texto y las acciones. */
+.shell.home-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100svh;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.home-shell .header { flex: 0 0 auto; }
+.home-shell .home-main { display: flex; flex: 1; min-height: 0; }
+.home-shell .welcome-page { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.home-shell .welcome-image-frame { flex: 1 1 0; min-height: 0; max-height: 510px; }
+.home-shell .welcome-photo { height: 100%; min-height: 0; }
+.home-shell .welcome-copy { flex: 0 0 auto; }
+.admin-settings-link { min-width: 44px; min-height: 44px; }
+.admin-settings-link img { display: block; width: 24px; height: 24px; }
+
+@media (min-width: 680px) {
+  .shell.home-shell { height: calc(100svh - 48px); }
+}
+
+@media (max-width: 360px) {
+  .admin-settings-link { flex-basis: 44px; width: 44px; height: 44px; }
+}

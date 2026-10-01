@@ -8,7 +8,7 @@ const { writeCoreFile } = require('../build-core.cjs');
 
 writeCoreFile();
 const base = path.join(__dirname, '..');
-const source = ['deploy/Core.gs', 'Service.gs', 'FinalSubmission.gs', 'Code.gs'].map(file => fs.readFileSync(path.join(base, file), 'utf8')).join('\n');
+const source = ['deploy/Core.gs', 'Service.gs', 'AdminSettings.gs', 'Notifications.gs', 'FinalSubmission.gs', 'Code.gs'].map(file => fs.readFileSync(path.join(base, file), 'utf8')).join('\n');
 
 function iterator(values) {
   let index = 0;
@@ -142,6 +142,19 @@ function accessFor(h, stationId) {
 function call(h, operation, payload) {
   return h.api.app5sHandle_(operation, payload, { requestId: 'r'.repeat(24), nonce: 'n'.repeat(24), receivedAt: '2026-09-21T11:15:00Z' });
 }
+
+test('horario configurable bloquea protocolos antiguos sin modificar datos y admite el flujo final', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  h.props.APP5S_INSPECTION_SCHEDULE = JSON.stringify({days:['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day=>({day,enabled:day==='Fri',start:'08:15',lastStart:'17:00',end:'17:00'}))});
+  h.setNow('2026-10-02T19:00:00Z');
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const before = JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name,sheet])=>[name,sheet.rows])));
+  const input = {stationId:'oficina',accessToken:accessFor(h,'oficina'),clientId:'phone-a',sessionId:'final-session-12345678',inspectorName:'Prueba final'};
+  for (const operation of ['state','reserve','save-answer','request-takeover','close']) assert.throws(()=>call(h,operation,input),/Actualiza la app/);
+  assert.equal(JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name,sheet])=>[name,sheet.rows]))),before);
+  assert.equal(call(h,'begin-final',input).state.status,'open');
+});
 
 test('flujo final real: inicio y foto no escriben Sheet; cierre completo materializa una sola vez', () => {
   const h = harness();

@@ -14,6 +14,11 @@ test('el paquete de Apps Script reúne puente, núcleo, servicio y persistencia'
   assert.match(code, /deteco-5s-bridge-v1/);
   assert.match(code, /function app5sCreateService/);
   assert.match(code, /function app5sHandle_/);
+  assert.match(code, /function app5sAdminSaveSchedule/);
+  assert.match(code, /function app5sAdminUpdateOwner/);
+  assert.match(code, /function app5sAdminSaveNotifications/);
+  assert.match(code, /function app5sNotifyClosedSafe_/);
+  new vm.Script(code);
   assert.equal(manifest.runtimeVersion, 'V8');
   assert.deepEqual(manifest.webapp, { executeAs: 'USER_DEPLOYING', access: 'ANYONE_ANONYMOUS' },
     'la versión nueva debe conservar el acceso anónimo del puente QR activo');
@@ -25,6 +30,8 @@ test('el paquete administrativo incluye el generador QR local y no depende de te
   const admin = fs.readFileSync(path.join(output, 'Admin.html'), 'utf8');
   assert.match(admin, /var qrcode\s*=\s*function/);
   assert.doesNotMatch(admin, /__LOCAL_QR_LIBRARY__/);
+  assert.doesNotMatch(admin, /__ADMIN_CONFIG_LIBRARY__/);
+  assert.match(admin, /window.app5sAdminConfig/);
   assert.doesNotMatch(admin, /<script[^>]+src=/i);
   assert.match(admin, /Imprimir QR/);
   const scripts = [...admin.matchAll(/<script>([\s\S]*?)<\/script>/gi)].map(match => match[1]);

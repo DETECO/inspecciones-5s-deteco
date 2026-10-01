@@ -73,7 +73,14 @@ function doPost(e) {
 }
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Admin')
+  const serviceUrl = String(ScriptApp.getService().getUrl() || '');
+  const deploymentId = serviceUrl.match(/\/s\/([A-Za-z0-9_-]+)\/(?:exec|dev)(?:[/?#]|$)/)?.[1];
+  if (!deploymentId) throw new Error('No se encontró la dirección publicada del panel.');
+  const continuation = 'https://script.google.com/a/macros/deteco.cl/s/' + deploymentId + '/exec';
+  const accountUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(continuation);
+  const html = HtmlService.createHtmlOutputFromFile('Admin').getContent()
+    .replace('__APP5S_ADMIN_ACCOUNT_URL__', accountUrl);
+  return HtmlService.createHtmlOutput(html)
     .setTitle('Administración 5S DETECO')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -510,6 +517,26 @@ function expireInspection(state, { at, closedBy = '', responsibleName = state.st
 }
 
 const CHILE = 'America/Santiago';
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DEFAULT_INSPECTION_SCHEDULE = Object.freeze({ days: DAYS.map((day, index) => Object.freeze({
+  day, enabled: index < 4, start: '08:15', lastStart: index === 3 ? '12:00' : '17:00', end: '17:00',
+})) });
+
+function normalizeInspectionSchedule(value) {
+  if (!value || !Array.isArray(value.days) || value.days.length !== 7) throw new Error('El horario debe contener siete días.');
+  const days = value.days.map((item, index) => {
+    if (!item || item.day !== DAYS[index] || typeof item.enabled !== 'boolean') throw new Error('Días del horario inválidos.');
+    const minutes = field => {
+      if (typeof item[field] !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item[field])) throw new Error('Hora de horario inválida.');
+      return Number(item[field].slice(0, 2)) * 60 + Number(item[field].slice(3));
+    };
+    const start = minutes('start'), lastStart = minutes('lastStart'), end = minutes('end');
+    if (!(start < lastStart && lastStart <= end)) throw new Error('Límites del horario inválidos.');
+    return { day: item.day, enabled: item.enabled, start: item.start, lastStart: item.lastStart, end: item.end };
+  });
+  if (!days.some(day => day.enabled)) throw new Error('Se requiere al menos un día habilitado.');
+  return { days };
+}
 
 function chileClock(date) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -544,21 +571,20 @@ function isoWeekChile(date) {
   return { isoYear, isoWeek, key: `${isoYear}-W${String(isoWeek).padStart(2, '0')}` };
 }
 
-function inspectionWindow(date, started) {
+function inspectionWindow(date, started, schedule = DEFAULT_INSPECTION_SCHEDULE) {
   const { weekday, seconds } = chileClock(date);
-  if (seconds < 8 * 3600 + 15 * 60 || seconds >= 17 * 3600) return 'closed';
-  if (['Mon', 'Tue', 'Wed'].includes(weekday)) return 'open';
-  if (weekday === 'Thu') {
-    if (seconds < 12 * 3600) return 'open';
-    return started ? 'late-continuation' : 'closed';
-  }
-  return 'closed';
+  const day = schedule.days.find(item => item.day === weekday);
+  if (!day?.enabled) return 'closed';
+  const limit = time => (Number(time.slice(0, 2)) * 60 + Number(time.slice(3))) * 60;
+  if (seconds < limit(day.start) || seconds >= limit(day.end)) return 'closed';
+  return seconds < limit(day.lastStart) ? 'open' : started && day.lastStart !== day.end ? 'late-continuation' : 'closed';
 }
 
-function weeklyDeadlinePassed(date) {
+function weeklyDeadlinePassed(date, schedule = DEFAULT_INSPECTION_SCHEDULE) {
   const { weekday, seconds } = chileClock(date);
-  if (weekday === 'Thu') return seconds >= 17 * 3600;
-  return ['Fri', 'Sat', 'Sun'].includes(weekday);
+  const last = [...schedule.days].reverse().find(day => day.enabled);
+  const today = DAYS.indexOf(weekday), finalDay = DAYS.indexOf(last.day);
+  return today > finalDay || today === finalDay && seconds >= (Number(last.end.slice(0, 2)) * 60 + Number(last.end.slice(3))) * 60;
 }
 
 function app5sCreateService(deps) {
@@ -687,6 +713,319 @@ function app5sCreateService(deps) {
   };
 }
 
+const APP5S_SCHEDULE_PROPERTY = 'APP5S_INSPECTION_SCHEDULE';
+
+function app5sScheduleConfig_() {
+  const value = PropertiesService.getScriptProperties().getProperty(APP5S_SCHEDULE_PROPERTY);
+  if (!value) return normalizeInspectionSchedule(DEFAULT_INSPECTION_SCHEDULE);
+  try {
+    return normalizeInspectionSchedule(JSON.parse(value));
+  } catch {
+    throw new Error('La configuración de horarios guardada es inválida.');
+  }
+}
+
+function app5sAdminSettings() {
+  const adminEmail = app5sRequireAdminEmail_('view');
+  return {
+    schedule: app5sScheduleConfig_(),
+    permissions: app5sAdminPermissions_(adminEmail),
+    adminEmail,
+  };
+}
+
+function app5sAdminSaveSchedule(payload) {
+  const adminEmail = app5sRequireAdminEmail_('configure');
+  const schedule = normalizeInspectionSchedule(payload?.schedule);
+  return app5sWithLock_(() => {
+    const previous = app5sScheduleConfig_();
+    if (JSON.stringify(previous) !== JSON.stringify(schedule)) {
+      PropertiesService.getScriptProperties().setProperty(APP5S_SCHEDULE_PROPERTY, JSON.stringify(schedule));
+      app5sSheet_('Auditoria').appendRow([new Date().toISOString(), 'HORARIO_CAMBIADO', '', '', '', '', '', adminEmail, 'Horario general actualizado (America/Santiago).']);
+    }
+    return { schedule, permissions: app5sAdminPermissions_(adminEmail), adminEmail };
+  });
+}
+
+function app5sAdminUpdateOwner(payload) {
+  const adminEmail = app5sRequireAdminEmail_('configure');
+  if (!payload || typeof payload.stationId !== 'string' || typeof payload.owner !== 'string' || typeof payload.expectedOwner !== 'string') throw new Error('Datos de encargado inválidos.');
+  const stationId = app5sValidStation_(payload.stationId);
+  const owner = payload.owner.trim().replace(/\s+/g, ' ');
+  if (owner.length > 100 || owner && (owner.length < 2 || /^[=+\-@]/.test(owner) || /[\x00-\x1f\x7f<>]/.test(owner))) throw new Error('Nombre del encargado inválido.');
+  return app5sWithLock_(() => {
+    const sheet = app5sSheet_('Configuracion');
+    const last = sheet.getLastRow();
+    const rows = last > 1 ? sheet.getRange(2, 1, last - 1, 4).getValues() : [];
+    const matches = rows.map((row, index) => ({ row, index })).filter(item => String(item.row[0]).trim() === stationId);
+    if (matches.length !== 1) throw new Error('Configuración de estación inválida o duplicada.');
+    const current = String(matches[0].row[3] || '').trim();
+    if (current !== payload.expectedOwner.trim()) throw new Error('El encargado fue cambiado por otra persona. Actualiza el panel.');
+    if (current !== owner) {
+      sheet.getRange(matches[0].index + 2, 4).setValue(owner);
+      app5sSheet_('Auditoria').appendRow([new Date().toISOString(), 'ENCARGADO_CAMBIADO', stationId, '', '', '', '', adminEmail, `Encargado del área: ${current || '(vacío)'} → ${owner || '(vacío)'}`]);
+    }
+    return app5sAdminSnapshot_(adminEmail, isoWeekChile(app5sNow_()).key);
+  });
+}
+
+const APP5S_NOTICE_CONFIG = 'APP5S_NOTICE_CONFIG_V1';
+const APP5S_NOTICE_STATUS = 'APP5S_NOTICE_STATUS_V1';
+const APP5S_NOTICE_READY = 'APP5S_NOTICE_READY_V1';
+const APP5S_NOTICE_RECEIPT = 'APP5S_NOTICE_RECEIPT_V1:';
+const APP5S_NOTICE_QUEUE = 'APP5S_NOTICE_QUEUE_V1:';
+
+function app5sNoticeDefault_() {
+  return { weeklyEnabled: false, closedEnabled: false, weeklyHour: 16, generalRecipients: [], stationRecipients: {} };
+}
+
+function app5sNoticeConfig_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(APP5S_NOTICE_CONFIG);
+  return raw ? JSON.parse(raw) : app5sNoticeDefault_();
+}
+
+function app5sNoticeValidate_(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Configuración de avisos inválida.');
+  if (typeof value.weeklyEnabled !== 'boolean' || typeof value.closedEnabled !== 'boolean') throw new Error('Interruptores de avisos inválidos.');
+  if (!Number.isInteger(value.weeklyHour) || value.weeklyHour < 0 || value.weeklyHour > 23) throw new Error('Hora del resumen inválida.');
+  if (!Array.isArray(value.generalRecipients) || !value.stationRecipients || typeof value.stationRecipients !== 'object' || Array.isArray(value.stationRecipients)) throw new Error('Destinatarios inválidos.');
+  const registry = app5sStationRegistry_();
+  const active = new Set(registry.filter(item => item.active).map(item => item.id));
+  const normalize = list => {
+    if (!Array.isArray(list)) throw new Error('Destinatarios inválidos.');
+    return [...new Set(list.map(item => {
+      if (typeof item !== 'string' || item.length > 254 || /[\r\n\u0000-\u001f\u007f]/.test(item)) throw new Error('Correo destinatario inválido.');
+      const email = item.trim().toLowerCase();
+      if (!/^[A-Za-z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/.test(email)) throw new Error('Correo destinatario inválido.');
+      return email;
+    }))];
+  };
+  const generalRecipients = normalize(value.generalRecipients);
+  const stationRecipients = {};
+  Object.keys(value.stationRecipients).forEach(id => {
+    if (!active.has(id)) throw new Error('Estación de destinatarios inválida.');
+    stationRecipients[id] = normalize(value.stationRecipients[id]);
+  });
+  const unique = new Set([...generalRecipients, ...Object.values(stationRecipients).flat()]);
+  if (unique.size > 50) throw new Error('Máximo 50 destinatarios únicos.');
+  if ((value.weeklyEnabled || value.closedEnabled) && unique.size === 0) throw new Error('Agrega al menos un destinatario antes de habilitar avisos.');
+  return { weeklyEnabled: value.weeklyEnabled, closedEnabled: value.closedEnabled, weeklyHour: value.weeklyHour, generalRecipients, stationRecipients };
+}
+
+function app5sNoticeAuthorized_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty(APP5S_NOTICE_READY) !== 'true') return false;
+  if (typeof ScriptApp === 'undefined' || typeof ScriptApp.getProjectTriggers !== 'function') return false;
+  if (!ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'app5sProcessNotifications')) return false;
+  if (typeof ScriptApp.getAuthorizationInfo === 'function') {
+    const info = ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);
+    if (info.getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) return false;
+  }
+  return true;
+}
+
+function app5sNoticeStatus_(status) {
+  PropertiesService.getScriptProperties().setProperty(APP5S_NOTICE_STATUS, JSON.stringify({ at: app5sNow_().toISOString(), ...status }));
+}
+
+function app5sNoticeSettings_() {
+  const config = app5sNoticeConfig_();
+  const enabled = config.weeklyEnabled || config.closedEnabled;
+  let authorizationRequired = false;
+  if (enabled) {
+    try { authorizationRequired = !app5sNoticeAuthorized_(); }
+    catch { authorizationRequired = true; }
+  }
+  const raw = PropertiesService.getScriptProperties().getProperty(APP5S_NOTICE_STATUS);
+  return { config, lastStatus: raw ? JSON.parse(raw) : null, authorizationRequired };
+}
+
+function app5sAdminNotificationSettings() {
+  app5sRequireAdminEmail_('configure');
+  return app5sNoticeSettings_();
+}
+
+function app5sAdminSaveNotifications(payload) {
+  app5sRequireAdminEmail_('configure');
+  const config = app5sNoticeValidate_(payload && payload.config);
+  PropertiesService.getScriptProperties().setProperty(APP5S_NOTICE_CONFIG, JSON.stringify(config));
+  return app5sNoticeSettings_();
+}
+
+function autorizarAvisosApp5S() {
+  const adminEmail = app5sRequireAdminEmail_('configure');
+  const ownerEmail = String(PropertiesService.getScriptProperties().getProperty('APP5S_OWNER_EMAIL') || '').trim().toLowerCase();
+  const effectiveEmail = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase();
+  if (!ownerEmail || adminEmail !== ownerEmail || effectiveEmail !== ownerEmail) throw new Error('El propietario debe ejecutar esta función con su cuenta autorizada.');
+  const config = app5sNoticeConfig_();
+  if (!config.weeklyEnabled && !config.closedEnabled) throw new Error('Primero habilita un aviso con destinatarios configurados.');
+  MailApp.getRemainingDailyQuota();
+  if (typeof ScriptApp.getAuthorizationInfo === 'function' && ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL).getAuthorizationStatus() === ScriptApp.AuthorizationStatus.REQUIRED) {
+    throw new Error('Autoriza los permisos de correo y programación en Apps Script y vuelve a ejecutar esta función.');
+  }
+  if (!ScriptApp.getProjectTriggers().some(trigger => trigger.getHandlerFunction() === 'app5sProcessNotifications')) {
+    ScriptApp.newTrigger('app5sProcessNotifications').timeBased().everyMinutes(5).create();
+  }
+  PropertiesService.getScriptProperties().setProperty(APP5S_NOTICE_READY, 'true');
+  return app5sNoticeSettings_();
+}
+
+function app5sNoticeRecipients_(config, stationIds) {
+  const scopes = new Map();
+  config.generalRecipients.forEach(email => scopes.set(email, new Set(stationIds)));
+  stationIds.forEach(id => (config.stationRecipients[id] || []).forEach(email => {
+    if (!scopes.has(email)) scopes.set(email, new Set());
+    scopes.get(email).add(id);
+  }));
+  return scopes;
+}
+
+function app5sNoticeNumber_(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(1).replace('.', ',') : 'Sin nota';
+}
+
+function app5sNoticeStateLine_(station, state, pendingKaizen) {
+  if (!state || state.status !== 'closed') return `${station.name}: ${state?.status === 'expired' ? 'Vencida' : 'Sin cierre'}; 5S: Sin nota; GD: Sin nota`;
+  const gd = state.result?.dailyManagement;
+  const gdText = gd?.applicable === true ? app5sNoticeNumber_(gd.score) : gd?.applicable === false ? 'No aplica' : 'Sin nota';
+  const findings = Object.values(state.findings || {}).reduce((count, items) => count + (Array.isArray(items) ? items.length : 0), 0);
+  return `${station.name}: Cerrada; 5S: ${app5sNoticeNumber_(state.result?.finalScore)}; GD: ${gdText}; Hallazgos: ${findings}; Kaizen pendientes: ${pendingKaizen}`;
+}
+
+function app5sNoticePendingKaizen_() {
+  const sheet = app5sSheet_('Kaizen');
+  const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 9).getValues() : [];
+  const counts = {};
+  rows.forEach(row => { if (row[2] === 'open') counts[row[1]] = (counts[row[1]] || 0) + 1; });
+  return counts;
+}
+
+function app5sNoticeSend_(kind, week, stationId, recipient, subject, body) {
+  const props = PropertiesService.getScriptProperties();
+  const key = APP5S_NOTICE_RECEIPT + kind + ':' + week + ':' + stationId + ':' + recipient;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return false;
+  try {
+    const receipt = props.getProperty(key);
+    if (receipt === 'sent' || receipt === 'uncertain') return true;
+    if (receipt === 'attempted') return false;
+    props.setProperty(key, 'attempted');
+  } finally {
+    lock.releaseLock();
+  }
+  // MailApp puede tardar; nunca retener el bloqueo usado por inspecciones y administración.
+  try {
+    if (MailApp.getRemainingDailyQuota() < 1) throw new Error('Cuota diaria de correo agotada.');
+  } catch (error) {
+    // Este proceso posee el intento y aún no ha llamado a sendEmail: es seguro reintentar.
+    props.setProperty(key, 'quota');
+    app5sNoticeStatus_({ kind, week, stationId, state: 'error', error: String(error.message || error).slice(0, 180) });
+    return false;
+  }
+  // El intento queda durable antes del envío: si el resultado es incierto, no se reenvía a ciegas.
+  try {
+    MailApp.sendEmail({ to: recipient, subject, body, name: 'Inspecciones 5S DETECO' });
+    props.setProperty(key, 'sent');
+    app5sNoticeStatus_({ kind, week, stationId, state: 'sent', error: '' });
+    return true;
+  } catch (error) {
+    props.setProperty(key, 'uncertain');
+    app5sNoticeStatus_({ kind, week, stationId, state: 'uncertain', error: String(error.message || error).slice(0, 180) });
+    return true;
+  }
+}
+
+function app5sNotifyClosedSafe_(state) {
+  try {
+    const config = app5sNoticeConfig_();
+    if (!config.closedEnabled || !state || state.status !== 'closed' || !/^[A-Za-z0-9_-]{1,100}$/.test(state.stationId) || !/^\d{4}-W\d{2}$/.test(state.week)) return;
+    PropertiesService.getScriptProperties().setProperty(APP5S_NOTICE_QUEUE + state.week + ':' + state.stationId, 'pending');
+  } catch (error) {
+    try { app5sNoticeStatus_({ kind: 'closed', week: state?.week || '', stationId: state?.stationId || '', state: 'error', error: String(error.message || error).slice(0, 180) }); } catch {}
+  }
+}
+
+function app5sNoticeChileClock_(date) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Santiago', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const get = type => parts.find(item => item.type === type).value;
+  return { day: get('weekday'), minutes: Number(get('hour')) * 60 + Number(get('minute')) };
+}
+
+function app5sNoticePartial_(schedule, minutes) {
+  const days = schedule?.days || [];
+  const order = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+  return days.some(slot => slot.enabled && (order[slot.day] > 4 || (slot.day === 'Fri' && Number(String(slot.end).slice(0, 2)) * 60 + Number(String(slot.end).slice(3, 5)) > minutes)));
+}
+
+function app5sProcessNotifications() {
+  app5sProcessNotifications_();
+}
+
+function app5sProcessNotifications_() {
+  const config = app5sNoticeConfig_();
+  if ((!config.weeklyEnabled && !config.closedEnabled) || !app5sNoticeAuthorized_()) return;
+  const props = PropertiesService.getScriptProperties();
+  if (config.closedEnabled) {
+    const queue = Object.keys(props.getProperties()).filter(key => key.startsWith(APP5S_NOTICE_QUEUE));
+    const registry = app5sStationRegistry_();
+    const pending = app5sNoticePendingKaizen_();
+    queue.forEach(key => {
+      const match = /^APP5S_NOTICE_QUEUE_V1:(\d{4}-W\d{2}):([A-Za-z0-9_-]{1,100})$/.exec(key);
+      if (!match) return;
+      const [, week, stationId] = match;
+      const station = registry.find(item => item.active && item.id === stationId);
+      const state = station && app5sLoadState_(stationId, week);
+      if (!state || state.status !== 'closed') return;
+      const body = `Inspección 5S cerrada · ${week}\n${app5sNoticeStateLine_(station, state, pending[stationId] || 0)}`;
+      const recipients = app5sNoticeRecipients_(config, [stationId]);
+      let complete = true;
+      recipients.forEach((scope, email) => {
+        if (!app5sNoticeSend_('closed', week, stationId, email, `Inspección 5S cerrada · ${station.name} · ${week}`, body)) complete = false;
+      });
+      if (complete) props.deleteProperty(key);
+    });
+  }
+  app5sNoticePruneReceipts_(app5sNow_());
+  if (!config.weeklyEnabled) return;
+  const now = app5sNow_();
+  const clock = app5sNoticeChileClock_(now);
+  if (clock.day !== 'Fri' || clock.minutes < config.weeklyHour * 60) return;
+  const week = isoWeekChile(now).key;
+  const stations = app5sStationRegistry_().filter(item => item.active);
+  const states = new Map(stations.map(item => [item.id, app5sLoadState_(item.id, week)]));
+  const pending = app5sNoticePendingKaizen_();
+  const schedule = typeof app5sScheduleConfig_ === 'function' ? app5sScheduleConfig_() : DEFAULT_INSPECTION_SCHEDULE;
+  const partial = app5sNoticePartial_(schedule, clock.minutes);
+  const recipients = app5sNoticeRecipients_(config, stations.map(item => item.id));
+  recipients.forEach((scope, email) => {
+    const selected = stations.filter(item => scope.has(item.id));
+    const closed = selected.filter(item => states.get(item.id)?.status === 'closed');
+    const expired = selected.filter(item => states.get(item.id)?.status === 'expired');
+    const withoutClose = selected.length - closed.length;
+    const overdue = partial ? expired.length : withoutClose;
+    const scores = closed.map(item => states.get(item.id)?.result?.finalScore).filter(value => typeof value === 'number' && Number.isFinite(value));
+    const average = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
+    const lines = [
+      `Resumen 5S · ${week}${partial ? ' · PARCIAL' : ''}`,
+      `Estaciones activas: ${selected.length}; Cerradas: ${closed.length}; Sin cierre: ${withoutClose}; Vencidas: ${overdue}`,
+      `Cierre: ${selected.length ? Math.round(closed.length / selected.length * 100) : 0}%; Promedio 5S cerradas: ${app5sNoticeNumber_(average)}`,
+      partial ? 'Resumen parcial: hay horarios habilitados después de esta hora.' : 'Resumen de los datos disponibles al envío.',
+      ...selected.map(item => app5sNoticeStateLine_(item, states.get(item.id), pending[item.id] || 0)),
+    ];
+    app5sNoticeSend_('weekly', week, 'all', email, `Resumen 5S ${week}${partial ? ' · parcial' : ''}`, lines.join('\n'));
+  });
+}
+
+function app5sNoticePruneReceipts_(now) {
+  const props = PropertiesService.getScriptProperties();
+  const cutoff = isoWeekChile(new Date(now.getTime() - 56 * 86400000)).key;
+  Object.keys(props.getProperties()).forEach(key => {
+    if (!key.startsWith(APP5S_NOTICE_RECEIPT)) return;
+    const match = /^APP5S_NOTICE_RECEIPT_V1:(?:closed|weekly):(\d{4}-W\d{2}):/.exec(key);
+    if (match && match[1] < cutoff) props.deleteProperty(key);
+  });
+}
+
 const APP5S_FINAL_PREFIX = 'APP5S_FINAL:';
 
 function app5sFinalSession_(value) {
@@ -738,6 +1077,7 @@ function app5sFinalPrune_(week) {
 
 function app5sFinalState_(stationId, week, lease) {
   const state = createInspection({ stationId, week, pendingKaizen: app5sLoadPendingKaizen_(stationId) });
+  state.schedule = lease?.schedule || (typeof app5sScheduleConfig_ === 'function' ? app5sScheduleConfig_() : DEFAULT_INSPECTION_SCHEDULE);
   return lease ? reserveInspection(state, { clientId: lease.clientId, inspectorName: lease.inspectorName, at: lease.startedAt }) : state;
 }
 
@@ -766,7 +1106,7 @@ function app5sFinalPhotos_(lease) {
 function app5sFinalSnapshot_(lease, payload, now) {
   const at = new Date(payload.occurredAt);
   if (!Number.isFinite(at.getTime()) || at > now || at < new Date(lease.startedAt) || isoWeekChile(at).key !== lease.week) throw new Error('La hora de cierre no corresponde a esta inspección.');
-  const windowState = inspectionWindow(at, true);
+  const windowState = inspectionWindow(now, true, lease.schedule || DEFAULT_INSPECTION_SCHEDULE);
   if (windowState === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
   const answers = payload.answers;
   const questions = inspectionQuestions(payload);
@@ -811,6 +1151,7 @@ function app5sFinalSnapshot_(lease, payload, now) {
 function app5sFinalFinish_(state) {
   if (state.finalMaterialized === true) {
     app5sFinalRelease_(state.stationId, state.week);
+    if (typeof app5sNotifyClosedSafe_ === 'function') app5sNotifyClosedSafe_(state);
     return;
   }
   app5sMaterializeClosed_(state);
@@ -819,6 +1160,7 @@ function app5sFinalFinish_(state) {
   state.finalMaterialized = true;
   app5sSaveState_(state);
   app5sFinalRelease_(state.stationId, state.week);
+  if (typeof app5sNotifyClosedSafe_ === 'function') app5sNotifyClosedSafe_(state);
 }
 
 function app5sFinalHandle_(operation, payload, stationId, meta) {
@@ -842,13 +1184,14 @@ function app5sFinalHandle_(operation, payload, stationId, meta) {
     throw new Error('La inspección de esta semana ya está cerrada.');
   }
   if (operation === 'begin-final') {
-    if (inspectionWindow(now, false) !== 'open') throw new Error('No se puede iniciar una inspección fuera del horario permitido.');
+    const schedule = typeof app5sScheduleConfig_ === 'function' ? app5sScheduleConfig_() : DEFAULT_INSPECTION_SCHEDULE;
+    if ((!lease || lease.sessionId !== sessionId) && inspectionWindow(now, false, schedule) !== 'open') throw new Error('No se puede iniciar una inspección fuera del horario permitido.');
     if (lease && lease.clientId !== clientId || !lease && stored?.editor && stored.editor.clientId !== clientId) throw new Error('La estación tiene una reserva activa. Solicita su liberación al administrador.');
     if (!lease || lease.sessionId !== sessionId) {
       app5sFinalPrune_(week);
       if (lease) app5sFinalClearPhotos_(lease);
       const state = reserveInspection(createInspection({ stationId, week }), { clientId, inspectorName: payload.inspectorName, at: now.toISOString() });
-      lease = { stationId, week, clientId, sessionId, inspectorName: state.startedBy, startedAt: state.startedAt };
+      lease = { stationId, week, clientId, sessionId, inspectorName: state.startedBy, startedAt: state.startedAt, schedule };
       PropertiesService.getScriptProperties().setProperty(app5sFinalLeaseKey_(stationId, week), JSON.stringify(lease));
     }
     return app5sFinalReply_(app5sFinalState_(stationId, week, lease), stationId, meta);
@@ -971,6 +1314,7 @@ function app5sPublicState_(state) {
     closedAt: state.closedAt || '',
     closedBy: state.closedBy || '',
     finalSessionId: state.finalSessionId || '',
+    schedule: state.schedule || null,
   };
 }
 
@@ -1261,25 +1605,51 @@ function app5sEvent_(type, state) {
 
 function app5sAdminSnapshot_(adminEmail, week) {
   const permissions = app5sAdminPermissions_(adminEmail);
+  const book = app5sBook_();
+  const rows = name => {
+    const sheet = book.getSheetByName(name);
+    if (!sheet) throw new Error(`Falta la pestaña ${name}.`);
+    const last = sheet.getLastRow();
+    return last > 1 ? sheet.getRange(2, 1, last - 1, APP5S_TABLES[name].length).getValues() : [];
+  };
+  const registry = rows('Configuracion').filter(row => row[0] && row[1]).map(row => ({
+    id: String(row[0]).trim(), name: String(row[1]).trim(), kind: String(row[2] || 'obra').trim().toLowerCase(),
+    owner: String(row[3] || '').trim(), active: app5sAdminEnabled_(row[4]),
+  }));
+  const stateByStation = new Map();
+  rows('Estado').filter(row => row[1] === week).forEach(row => {
+    if (stateByStation.has(row[0])) throw new Error('Hay estados duplicados para la semana.');
+    try { stateByStation.set(row[0], JSON.parse(row[3])); }
+    catch { throw new Error('El estado guardado de la inspección no se puede leer.'); }
+  });
+  const accessByStation = new Map();
+  if (permissions.canConfigure) rows('Accesos').forEach(row => {
+    if (!accessByStation.has(row[0])) accessByStation.set(row[0], []);
+    accessByStation.get(row[0]).push(row);
+  });
   return {
     adminEmail,
     week,
     permissions,
-    stations: app5sStationRegistry_().filter(station => station.active).map(station => {
-      const stored = app5sLoadState_(station.id, week);
+    stations: registry.filter(station => station.active).map(station => {
+      const stored = stateByStation.get(station.id);
       const lease = typeof app5sFinalLease_ === 'function' ? app5sFinalLease_(station.id, week) : null;
       const state = lease && !['closed', 'expired'].includes(stored?.status)
         ? { status: 'open', startedBy: lease.inspectorName, startedAt: lease.startedAt, editor: { clientId: lease.clientId, inspectorName: lease.inspectorName } } : stored;
       return {
         stationId: station.id,
         stationName: station.name,
+        owner: station.owner,
         week,
         status: state?.status || 'new',
         startedBy: state?.startedBy || '',
         startedAt: state?.startedAt || '',
         editorName: state?.editor?.inspectorName || '',
         editorId: state?.editor?.clientId || '',
-        qrUrl: permissions.canConfigure ? app5sStationQrUrl_(station.id) : '',
+        qrUrl: permissions.canConfigure && accessByStation.get(station.id)?.length === 1
+          && app5sAdminEnabled_(accessByStation.get(station.id)[0][2])
+          && typeof accessByStation.get(station.id)[0][1] === 'string'
+          ? app5sQrUrl_(station.id, accessByStation.get(station.id)[0][1]) : '',
       };
     }),
   };
@@ -1672,6 +2042,8 @@ function app5sHandle_(operation, payload, meta) {
   app5sVerifyAccess_(stationId, payload.accessToken);
   return app5sWithLock_(() => {
     if (['begin-final', 'upload-final-photo', 'submit-final', 'final-state'].includes(operation)) return app5sFinalHandle_(operation, payload, stationId, meta);
+    // Los clientes antiguos no conocen la política configurable ni el cierre completo.
+    if (PropertiesService.getScriptProperties().getProperty('APP5S_INSPECTION_SCHEDULE')) throw new Error('Actualiza la app para usar los horarios configurados y el guardado completo al cerrar.');
     if (typeof app5sFinalLease_ === 'function' && operation !== 'state' && app5sFinalLease_(stationId, isoWeekChile(app5sNow_()).key)) throw new Error('Actualiza la app para usar el guardado completo al cerrar.');
     const service = app5sService_();
     let state;

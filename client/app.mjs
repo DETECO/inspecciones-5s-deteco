@@ -1,6 +1,6 @@
 import { STATIONS, MODULES, QUESTIONS, DAILY_MANAGEMENT, getQuestion } from '../domain/catalog.mjs?v=20261001-gd';
 import { inspectionQuestions } from '../domain/daily-management.mjs?v=20261001-gd';
-import { isoWeekChile, inspectionWindow } from '../domain/calendar.mjs';
+import { isoWeekChile, inspectionWindow } from '../domain/calendar.mjs?v=20261001-admin-settings';
 import { validateInspection } from '../domain/scoring.mjs?v=20261001-gd';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
@@ -176,7 +176,7 @@ function storageReadFromSession(key) {
 }
 
 function currentWindow() {
-  return inspectionWindow(new Date(), Boolean(state.inspection?.startedAt));
+  return inspectionWindow(new Date(), Boolean(state.inspection?.startedAt), state.inspection?.schedule || undefined);
 }
 
 function completionStatus() {
@@ -226,7 +226,7 @@ function header() {
   const title = state.route ? stationName() : 'INSPECCIÓN 5S';
   const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${activeQuestions().length} respuestas` : 'Acceso por QR';
   const adminButton = !state.route && appConfig.mode === 'bridge'
-    ? '<a class="admin-link admin-settings-link" href="./admin-login.html" aria-label="Administración" title="Panel de administración"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.2 13.8 1.2.9-1.5 2.6-1.5-.5a7.8 7.8 0 0 1-1.5.9l-.3 1.6h-3l-.3-1.6a7.8 7.8 0 0 1-1.5-.9l-1.5.5-1.5-2.6 1.2-.9a7.4 7.4 0 0 1 0-1.8l-1.2-.9 1.5-2.6 1.5.5a7.8 7.8 0 0 1 1.5-.9l.3-1.6h3l.3 1.6a7.8 7.8 0 0 1 1.5.9l1.5-.5 1.5 2.6-1.2.9a7.4 7.4 0 0 1 0 1.8Z"/></svg></a>'
+    ? '<a class="admin-link admin-settings-link" href="./admin-login.html" aria-label="Administración" title="Panel de administración"><img src="./assets/icons/settings.svg" alt=""></a>'
     : '';
   return `
     <header class="header">
@@ -462,10 +462,11 @@ async function toggleFlashlight() {
 }
 
 function scheduleMessage() {
+  if (appConfig.mode === 'bridge' && !state.inspection?.startedAt) return '<div class="notice"><span class="notice-icon">i</span><span>El servidor comprobará el horario vigente de Chile al iniciar.</span></div>';
   const windowState = currentWindow();
   if (windowState === 'open') return '';
   if (windowState === 'late-continuation') return `<div class="notice"><span class="notice-icon">!</span><span>Solo puedes terminar una inspección ya iniciada. Al cerrar se registrará como <strong>cumplida con atraso</strong>.</span></div>`;
-  return `<div class="notice danger"><span class="notice-icon">!</span><span>Puedes iniciar de lunes a miércoles entre 08:15 y 17:00, y el jueves hasta las 12:00. El jueves hasta las 17:00 solo se permite terminar una inspección iniciada antes de las 12:00 en esta misma página.</span></div>`;
+  return `<div class="notice danger"><span class="notice-icon">!</span><span>El horario de Chile para esta inspección está cerrado.</span></div>`;
 }
 
 function identityPage() {
@@ -475,7 +476,7 @@ function identityPage() {
     && navigator.onLine
     && !heldByOther
     && !unavailable
-    && currentWindow() === 'open';
+    && (appConfig.mode === 'bridge' || currentWindow() === 'open');
   const names = [...new Set([...state.knownInspectors, ...storageRead(namesKey, [])].map(name => String(name).trim()).filter(Boolean))]
     .map(name => `<option value="${esc(name)}"></option>`).join('');
   return `
@@ -668,6 +669,7 @@ function render() {
   else if (state.screen === 'summary') content = summaryPage();
   else content = qrPage();
   const mainClass = !state.route && state.screen === 'qr' ? 'home-main' : '';
+  appElement.classList?.toggle('home-shell', !state.route && state.screen === 'qr');
   appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${content}</main>`;
   if (state.closing) appElement.querySelectorAll?.('input, textarea, button').forEach(control => { control.disabled = true; });
   if (preserveInspectorFocus && state.screen === 'identity') {

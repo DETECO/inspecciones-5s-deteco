@@ -26,7 +26,7 @@ function load(overrides = {}) {
     app5sHandle_: () => ({ ok: true, state: { status: 'new' } }),
     ...overrides,
   };
-  const api = vm.runInNewContext(`${source}\n({ app5sDecodePayload_, app5sBridgeReceipt_, doPost })`, context);
+  const api = vm.runInNewContext(`${source}\n({ app5sDecodePayload_, app5sBridgeReceipt_, doPost, doGet })`, context);
   return { api, props };
 }
 
@@ -53,4 +53,19 @@ test('doPost confirma la misma solicitud y no envía errores crudos al navegador
   const output = api.doPost({ parameter: { requestId: 'r'.repeat(24), nonce: 'n'.repeat(24), operation: 'state', payload } });
   assert.match(output.html, /deteco-5s-bridge-v1/);
   assert.doesNotMatch(output.html, /detalle interno/);
+});
+
+test('doGet inserta el enlace real de regreso al panel sin depender del iframe ni del referrer', () => {
+  const deploymentId = 'AKfycbyTest1234567890';
+  const { api } = load({
+    ScriptApp: { getService: () => ({ getUrl: () => `https://script.google.com/macros/s/${deploymentId}/exec` }) },
+    HtmlService: {
+      createHtmlOutputFromFile: () => ({ getContent: () => '<a id="account-switch" href="__APP5S_ADMIN_ACCOUNT_URL__">Cambiar cuenta</a>' }),
+      createHtmlOutput: html => ({ html, setTitle() { return this; }, addMetaTag() { return this; } }),
+    },
+  });
+  const html = api.doGet().html;
+  assert.doesNotMatch(html, /__APP5S_ADMIN_ACCOUNT_URL__/);
+  const encoded = html.match(/continue=([^\"]+)/)[1];
+  assert.equal(decodeURIComponent(encoded), `https://script.google.com/a/macros/deteco.cl/s/${deploymentId}/exec`);
 });

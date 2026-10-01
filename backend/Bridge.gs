@@ -73,7 +73,14 @@ function doPost(e) {
 }
 
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Admin')
+  const serviceUrl = String(ScriptApp.getService().getUrl() || '');
+  const deploymentId = serviceUrl.match(/\/s\/([A-Za-z0-9_-]+)\/(?:exec|dev)(?:[/?#]|$)/)?.[1];
+  if (!deploymentId) throw new Error('No se encontró la dirección publicada del panel.');
+  const continuation = 'https://script.google.com/a/macros/deteco.cl/s/' + deploymentId + '/exec';
+  const accountUrl = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(continuation);
+  const html = HtmlService.createHtmlOutputFromFile('Admin').getContent()
+    .replace('__APP5S_ADMIN_ACCOUNT_URL__', accountUrl);
+  return HtmlService.createHtmlOutput(html)
     .setTitle('Administración 5S DETECO')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

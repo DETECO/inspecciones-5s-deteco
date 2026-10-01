@@ -90,6 +90,7 @@ function app5sPublicState_(state) {
     closedAt: state.closedAt || '',
     closedBy: state.closedBy || '',
     finalSessionId: state.finalSessionId || '',
+    schedule: state.schedule || null,
   };
 }
 
@@ -380,25 +381,51 @@ function app5sEvent_(type, state) {
 
 function app5sAdminSnapshot_(adminEmail, week) {
   const permissions = app5sAdminPermissions_(adminEmail);
+  const book = app5sBook_();
+  const rows = name => {
+    const sheet = book.getSheetByName(name);
+    if (!sheet) throw new Error(`Falta la pestaña ${name}.`);
+    const last = sheet.getLastRow();
+    return last > 1 ? sheet.getRange(2, 1, last - 1, APP5S_TABLES[name].length).getValues() : [];
+  };
+  const registry = rows('Configuracion').filter(row => row[0] && row[1]).map(row => ({
+    id: String(row[0]).trim(), name: String(row[1]).trim(), kind: String(row[2] || 'obra').trim().toLowerCase(),
+    owner: String(row[3] || '').trim(), active: app5sAdminEnabled_(row[4]),
+  }));
+  const stateByStation = new Map();
+  rows('Estado').filter(row => row[1] === week).forEach(row => {
+    if (stateByStation.has(row[0])) throw new Error('Hay estados duplicados para la semana.');
+    try { stateByStation.set(row[0], JSON.parse(row[3])); }
+    catch { throw new Error('El estado guardado de la inspección no se puede leer.'); }
+  });
+  const accessByStation = new Map();
+  if (permissions.canConfigure) rows('Accesos').forEach(row => {
+    if (!accessByStation.has(row[0])) accessByStation.set(row[0], []);
+    accessByStation.get(row[0]).push(row);
+  });
   return {
     adminEmail,
     week,
     permissions,
-    stations: app5sStationRegistry_().filter(station => station.active).map(station => {
-      const stored = app5sLoadState_(station.id, week);
+    stations: registry.filter(station => station.active).map(station => {
+      const stored = stateByStation.get(station.id);
       const lease = typeof app5sFinalLease_ === 'function' ? app5sFinalLease_(station.id, week) : null;
       const state = lease && !['closed', 'expired'].includes(stored?.status)
         ? { status: 'open', startedBy: lease.inspectorName, startedAt: lease.startedAt, editor: { clientId: lease.clientId, inspectorName: lease.inspectorName } } : stored;
       return {
         stationId: station.id,
         stationName: station.name,
+        owner: station.owner,
         week,
         status: state?.status || 'new',
         startedBy: state?.startedBy || '',
         startedAt: state?.startedAt || '',
         editorName: state?.editor?.inspectorName || '',
         editorId: state?.editor?.clientId || '',
-        qrUrl: permissions.canConfigure ? app5sStationQrUrl_(station.id) : '',
+        qrUrl: permissions.canConfigure && accessByStation.get(station.id)?.length === 1
+          && app5sAdminEnabled_(accessByStation.get(station.id)[0][2])
+          && typeof accessByStation.get(station.id)[0][1] === 'string'
+          ? app5sQrUrl_(station.id, accessByStation.get(station.id)[0][1]) : '',
       };
     }),
   };
@@ -791,6 +818,8 @@ function app5sHandle_(operation, payload, meta) {
   app5sVerifyAccess_(stationId, payload.accessToken);
   return app5sWithLock_(() => {
     if (['begin-final', 'upload-final-photo', 'submit-final', 'final-state'].includes(operation)) return app5sFinalHandle_(operation, payload, stationId, meta);
+    // Los clientes antiguos no conocen la política configurable ni el cierre completo.
+    if (PropertiesService.getScriptProperties().getProperty('APP5S_INSPECTION_SCHEDULE')) throw new Error('Actualiza la app para usar los horarios configurados y el guardado completo al cerrar.');
     if (typeof app5sFinalLease_ === 'function' && operation !== 'state' && app5sFinalLease_(stationId, isoWeekChile(app5sNow_()).key)) throw new Error('Actualiza la app para usar el guardado completo al cerrar.');
     const service = app5sService_();
     let state;

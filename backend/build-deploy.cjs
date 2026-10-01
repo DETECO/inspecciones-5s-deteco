@@ -12,12 +12,14 @@ function buildAdminHtml() {
     throw new Error('Admin.html debe contener una única marca para el generador QR local.');
   }
   const qrLibrary = read('vendor/qrcode-generator-2.0.4.js');
-  return html.replace(qrLibraryMarker, () => qrLibrary);
+  const configMarker = '/*__ADMIN_CONFIG_LIBRARY__*/';
+  if (html.split(configMarker).length !== 2) throw new Error('Admin.html requiere una marca de configuración administrativa.');
+  return html.replace(qrLibraryMarker, () => qrLibrary).replace(configMarker, () => read('admin-settings-ui.js'));
 }
 
 function writeDeploy(destination = path.join(base, 'deploy')) {
   fs.mkdirSync(destination, { recursive: true });
-  const code = [read('Bridge.gs'), buildCoreSource().trim(), read('Service.gs'), read('FinalSubmission.gs'), read('Code.gs')].join('\n\n');
+  const code = [read('Bridge.gs'), buildCoreSource().trim(), read('Service.gs'), read('AdminSettings.gs'), read('Notifications.gs'), read('FinalSubmission.gs'), read('Code.gs')].join('\n\n');
   const manifest = {
     timeZone: 'America/Santiago',
     exceptionLogging: 'STACKDRIVER',

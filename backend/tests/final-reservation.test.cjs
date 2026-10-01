@@ -116,3 +116,27 @@ test('No aplica registra decisión explícita y no exige las ocho GD', () => {
   assert.equal(result.result.dailyManagement.applicable, false);
   assert.equal(result.result.dailyManagement.score, null);
 });
+
+test('aviso de cierre solo se encola después de confirmar materialización completa', () => {
+  const h = harness();
+  const queued = [];
+  h.context.app5sNotifyClosedSafe_ = state => queued.push({status:state.status,materialized:state.finalMaterialized});
+  h.call('begin-final');
+  const answers = Object.fromEntries(vm.runInContext('QUESTIONS.map(q => [q.id, 0])', h.context));
+  const input = {answers,dailyManagementApplicable:false,findings:{},kaizenReviews:{},occurredAt:'2026-09-30T15:00:00Z'};
+  h.fail(true);
+  assert.throws(() => h.call('submit-final', input), /interrupted/);
+  assert.equal(queued.length,0);
+  h.fail(false);
+  h.call('submit-final', input);
+  assert.deepEqual(queued,[{status:'closed',materialized:true}]);
+});
+
+test('cierre valida hora del servidor y no permite saltar el horario con fecha retroactiva', () => {
+  const h = harness();
+  h.call('begin-final');
+  const answers = Object.fromEntries(vm.runInContext('QUESTIONS.map(q=>[q.id,0])',h.context));
+  h.context.app5sNow_ = () => new Date('2026-09-30T20:01:00Z');
+  assert.throws(()=>h.call('submit-final',{answers,dailyManagementApplicable:false,findings:{},kaizenReviews:{},occurredAt:'2026-09-30T15:00:00Z'}),/horario permitido/);
+  assert.equal(h.writes(),0);
+});
