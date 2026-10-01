@@ -33,3 +33,12 @@ test('formularios: API, validación y confirmación de horarios y avisos', () =>
   assert.match(source, /stationRecipients/);
   assert.doesNotMatch(source, /`[^`]*https:\/\//s);
 });
+
+test('consulta manual secundaria explica su función y no descarta formularios de configuración', () => {
+  const source = html();
+  assert.match(source, /Ver últimos estados/);
+  assert.match(source, /Solo consulta la información; no modifica ni cierra inspecciones/);
+  assert.match(source, /el\('refresh'\)\.hidden = showSettings/);
+  assert.doesNotMatch(source, /Actualizar estados|Actualizar configuración/);
+  assert.match(source, /Correos y resúmenes/);
+});

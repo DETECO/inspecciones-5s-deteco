@@ -38,8 +38,9 @@
     .admin-intro p{margin:10px 0 0;color:#69737b;font-size:15px;line-height:1.45}
     .admin-workspace main{width:min(calc(100% - 64px),1240px);margin:23px auto 60px}
     .admin-workspace .toolbar{margin-bottom:17px}
-    .admin-workspace .refresh{border-color:var(--orange);color:#fff;background:var(--orange)}
-    .admin-workspace .refresh:hover{background:var(--orange-dark)}
+    .admin-workspace .refresh{width:auto;min-height:44px;border-color:var(--line);color:var(--charcoal);background:#fff;font-size:13px}
+    .admin-workspace .refresh:hover{background:var(--orange-pale)}
+    .refresh-tools{display:grid;justify-items:start;gap:5px}.refresh-help{max-width:280px;color:var(--muted);font-size:11px;line-height:1.5}.refresh-tools[hidden]{display:none}
     .admin-workspace .station{min-height:182px;border-color:#e8e5df;border-radius:13px;box-shadow:0 5px 16px #4947410b}
     .admin-workspace .station h2{text-transform:capitalize}
     .admin-workspace .qr-copy{background:var(--orange);border-color:var(--orange)}
@@ -58,7 +59,7 @@
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Navegación 5S">
       <a class="admin-brand" href="https://deteco.github.io/inspecciones-5s-deteco/" aria-label="Ir a Inspección 5S DETECO"><img class="brand-logo" src="https://deteco.github.io/inspecciones-5s-deteco/assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción"></a>
-      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" data-view="stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="#kaizen" data-view="kaizen"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan-eye.svg" alt="">Kaizen</a><a href="#schedule" data-view="schedule" hidden>Horarios</a><a href="#notifications" data-view="notifications" hidden>Correos</a></nav>
+      <nav class="admin-nav" aria-label="Secciones"><a class="active" href="#stations" data-view="stations" aria-current="page"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/qrcode.svg" alt="">Estaciones</a><a href="#kaizen" data-view="kaizen"><img src="https://deteco.github.io/inspecciones-5s-deteco/assets/icons/scan-eye.svg" alt="">Kaizen</a><a href="#schedule" data-view="schedule" hidden>Horarios</a><a href="#notifications" data-view="notifications" hidden>Correos y resúmenes</a></nav>
       <div class="admin-sidebar-foot">DETECO · Control semanal de estaciones</div>
     </aside>
     <div class="admin-workspace">
@@ -71,7 +72,7 @@
       <button id="retry-access" type="button">Volver a comprobar acceso</button>
     </div>
     <section id="panel" hidden>
-      <div class="toolbar"><div id="who" class="count"></div><button class="refresh" id="refresh" type="button">Actualizar estados</button></div>
+      <div class="toolbar"><div id="who" class="count"></div><div id="refresh-tools" class="refresh-tools"><button class="refresh" id="refresh" type="button" aria-describedby="refresh-help">Ver últimos estados</button><span id="refresh-help" class="refresh-help">Solo consulta la información; no modifica ni cierra inspecciones.</span></div></div>
       <div id="action-notice" class="notice" hidden role="status"></div>
       <section id="stations-view">
       <section id="add-work" class="add-work" hidden aria-labelledby="add-work-title">
@@ -137,7 +138,7 @@
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? 'Fecha no disponible' : date.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
       };
-      const statusLabel = status => ({new:'Sin iniciar',open:'En progreso',closed:'Cerrada',expired:'Cerrada incompleta'})[status] || 'Estado desconocido';
+      const statusLabel = station => station.status === 'open' && !station.editorId ? 'Pendiente' : ({new:'Pendiente',open:'En progreso',closed:'Cerrada',expired:'Cerrada incompleta'})[station.status] || 'Estado desconocido';
       const kaizenStatusLabel = status => status === 'closed' ? 'Cerrado' : 'Pendiente';
       let loadGeneration = 0;
       function showMessage(text, type = '') {
@@ -189,6 +190,8 @@
         el('panel').hidden = false;
         el('week').textContent = snapshot.week.replace('-', ' · ');
         el('who').textContent = `Sesión autorizada: ${snapshot.adminEmail}`;
+        const consultedAt = new Date().toLocaleTimeString('es-CL', {timeZone:'America/Santiago',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+        el('refresh-help').textContent = `Última consulta: ${consultedAt}. Solo consulta la información; no modifica ni cierra inspecciones.`;
         el('action-notice').hidden = true;
         document.querySelectorAll('[data-view="schedule"],[data-view="notifications"]').forEach(link => { link.hidden = !snapshot.permissions?.canConfigure; });
         el('add-work').hidden = !snapshot.permissions?.canConfigure;
@@ -197,18 +200,22 @@
         if ([...el('kaizen-stations').options].some(option => option.value === previousStation)) el('kaizen-stations').value = previousStation;
         setView(state.view);
         el('stations').innerHTML = snapshot.stations.map(station => {
-          const canRelease = snapshot.permissions?.canRelease && station.status === 'open' && station.editorId;
-          const details = station.status === 'open'
-            ? `<div>Responsable inicial: <strong>${escapeHtml(station.startedBy || 'Sin asignar')}</strong></div><div>Reserva actual: <strong>${escapeHtml(station.editorName || 'Sin editor')}</strong></div><div>Inicio: <strong>${escapeHtml(formatDate(station.startedAt))}</strong></div>`
-            : `<div>Responsable inicial: <strong>${escapeHtml(station.startedBy || '—')}</strong></div>`;
+          const active = station.status === 'open' && Boolean(station.editorId);
+          const canRelease = snapshot.permissions?.canRelease && active;
+          const details = active
+            ? `<div>Inspector actual: <strong>${escapeHtml(station.editorName || station.startedBy || 'No disponible')}</strong></div><div>Inicio: <strong>${escapeHtml(formatDate(station.startedAt))}</strong></div>`
+            : ['closed','expired'].includes(station.status)
+              ? `<div>Inspector registrado: <strong>${escapeHtml(station.startedBy || '—')}</strong></div>`
+              : '<div>Sin inspección cerrada esta semana.</div>';
           const action = canRelease
             ? `<button class="release" type="button" data-station="${escapeHtml(station.stationId)}">Liberar estación</button>`
-            : `<span class="empty-action">${station.status === 'open' && station.editorId && !snapshot.permissions?.canRelease ? 'Sin permiso para liberar' : station.status === 'open' && !station.editorId ? 'Sin reserva activa' : 'No requiere liberación'}</span>`;
+            : active ? '<span class="empty-action">Solo un administrador con permiso puede liberar esta estación.</span>' : '';
           const qrAction = snapshot.permissions?.canConfigure && station.qrUrl
             ? `<button class="copy-link qr-copy" type="button" data-qr="${escapeHtml(station.stationId)}">Ver / imprimir QR</button>`
             : '';
           const ownerAction = snapshot.permissions?.canConfigure ? `<button class="cancel qr-copy" type="button" data-owner="${escapeHtml(station.stationId)}">Editar encargado</button>` : '';
-          return `<article class="station"><div class="station-top"><h2>${escapeHtml(station.stationName)}</h2><span class="state ${escapeHtml(station.status)}">${escapeHtml(statusLabel(station.status))}</span></div><div class="details"><div>Encargado del área: <strong>${escapeHtml(station.owner || 'Sin asignar')}</strong></div>${details}</div><div class="station-actions">${qrAction}${ownerAction}${action}</div></article>`;
+          const displayStatus = station.status === 'open' && !active ? 'new' : station.status;
+          return `<article class="station"><div class="station-top"><h2>${escapeHtml(station.stationName)}</h2><span class="state ${escapeHtml(displayStatus)}">${escapeHtml(statusLabel(station))}</span></div><div class="details"><div>Encargado del área: <strong>${escapeHtml(station.owner || 'Sin asignar')}</strong></div>${details}</div><div class="station-actions">${qrAction}${ownerAction}${action}</div></article>`;
         }).join('');
         el('stations').querySelectorAll('[data-station]').forEach(button => button.addEventListener('click', () => openDialog(button.dataset.station)));
         el('stations').querySelectorAll('[data-qr]').forEach(button => button.addEventListener('click', () => {
@@ -259,7 +266,9 @@
         const descriptions = {stations:'Administra las obras, los códigos QR y los encargados de cada estación.',kaizen:'Consulta hallazgos, responsables, evidencias y cierres por estación.',schedule:'Define los días y horarios habilitados para iniciar y cerrar inspecciones.',notifications:'Configura destinatarios, resúmenes semanales y avisos de cierre.'};
         el('page-title').textContent = titles[state.view];
         el('page-description').textContent = descriptions[state.view];
-        el('refresh').textContent = showSettings ? 'Actualizar configuración' : state.view === 'kaizen' ? 'Actualizar Kaizen' : 'Actualizar estados';
+        el('refresh-tools').hidden = showSettings;
+        el('refresh').hidden = showSettings;
+        el('refresh').textContent = state.view === 'kaizen' ? 'Ver últimos Kaizen' : 'Ver últimos estados';
         if (state.view === 'kaizen' && state.snapshot) loadKaizen();
       }
       function renderKaizen(result) {
