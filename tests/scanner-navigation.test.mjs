@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const appSource = readFileSync(new URL('../client/app.mjs', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../client/app.mjs', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const scannedQrHandler = appSource.match(
   /async function handleScannedQr\(result\) \{[\s\S]*?\n\}\n\nfunction openScanner\(/,
 )?.[0] || '';
