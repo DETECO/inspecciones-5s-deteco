@@ -1,6 +1,7 @@
-import { STATIONS, MODULES, QUESTIONS, getQuestion } from '../domain/catalog.mjs';
+import { STATIONS, MODULES, QUESTIONS, DAILY_MANAGEMENT, getQuestion } from '../domain/catalog.mjs?v=20261001-gd';
+import { inspectionQuestions } from '../domain/daily-management.mjs?v=20261001-gd';
 import { isoWeekChile, inspectionWindow } from '../domain/calendar.mjs';
-import { validateInspection } from '../domain/scoring.mjs';
+import { validateInspection } from '../domain/scoring.mjs?v=20261001-gd';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
 import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
@@ -8,7 +9,7 @@ import { createFormBridge } from '../transport/form-client.mjs';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
 import { readImageForUpload } from './image-upload.mjs';
-import { submitFinalInspection } from './final-submit.mjs?v=20260930-final-submit';
+import { submitFinalInspection } from './final-submit.mjs?v=20261001-gd';
 import {
   createInspection,
   reserveInspection,
@@ -16,7 +17,7 @@ import {
   saveFinding,
   discardExtraFindings,
   closeInspection,
-} from '../domain/inspection.mjs';
+} from '../domain/inspection.mjs?v=20261001-gd';
 import { parseQrRoute, scrubQrFragment } from './route.mjs';
 
 const appElement = document.querySelector('#app');
@@ -183,11 +184,19 @@ function completionStatus() {
 }
 
 function answeredCount() {
-  return Object.keys(state.inspection?.answers || {}).filter(id => Number.isInteger(state.inspection.answers[id])).length;
+  return activeQuestions().filter(q => Number.isInteger(state.inspection?.answers[q.id])).length;
+}
+
+function activeQuestions() {
+  return state.inspection?.dailyManagementApplicable === true ? [...QUESTIONS, ...DAILY_MANAGEMENT.questions] : QUESTIONS;
+}
+
+function activeModules() {
+  return state.inspection?.dailyManagementApplicable === true ? [...MODULES, DAILY_MANAGEMENT] : MODULES;
 }
 
 function percent() {
-  return Math.round((answeredCount() / QUESTIONS.length) * 100);
+  return Math.round((answeredCount() / activeQuestions().length) * 100);
 }
 
 function number(value) {
@@ -215,7 +224,7 @@ function header() {
       </header>`;
   }
   const title = state.route ? stationName() : 'INSPECCIÓN 5S';
-  const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${QUESTIONS.length} respuestas` : 'Acceso por QR';
+  const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${activeQuestions().length} respuestas` : 'Acceso por QR';
   const adminButton = !state.route && appConfig.mode === 'bridge'
     ? '<a class="admin-link admin-settings-link" href="./admin-login.html" aria-label="Administración" title="Panel de administración"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="m19.2 13.8 1.2.9-1.5 2.6-1.5-.5a7.8 7.8 0 0 1-1.5.9l-.3 1.6h-3l-.3-1.6a7.8 7.8 0 0 1-1.5-.9l-1.5.5-1.5-2.6 1.2-.9a7.4 7.4 0 0 1 0-1.8l-1.2-.9 1.5-2.6 1.5.5a7.8 7.8 0 0 1 1.5-.9l.3-1.6h3l.3 1.6a7.8 7.8 0 0 1 1.5.9l1.5-.5 1.5 2.6-1.2.9a7.4 7.4 0 0 1 0 1.8Z"/></svg></a>'
     : '';
@@ -511,17 +520,17 @@ function kaizenCard(item) {
 }
 
 function tabs() {
-  return `<nav class="module-tabs" aria-label="Módulos 5S">${MODULES.map((module, index) => {
+  return `<nav class="module-tabs" aria-label="Módulos de inspección">${activeModules().map((module, index) => {
     const complete = module.questions.every(question => Number.isInteger(state.inspection.answers[question.id]));
     return `<button class="module-tab ${index === state.moduleIndex ? 'active' : ''} ${complete ? 'done' : ''}" data-action="module" data-index="${index}">${esc(module.title)}</button>`;
   }).join('')}</nav>`;
 }
 
 function modulePage() {
-  const module = MODULES[state.moduleIndex];
+  const module = activeModules()[state.moduleIndex];
   return `
     <section class="page-enter">
-      <div class="eyebrow">Módulo ${state.moduleIndex + 1} de ${MODULES.length}</div>
+      <div class="eyebrow">Módulo ${state.moduleIndex + 1} de ${activeModules().length}</div>
       <h1>${esc(module.title)}</h1>
       <p class="lead">Selecciona de 0 a 5 hallazgos. Cada hallazgo necesita una fotografía; la nota descriptiva es opcional.</p>
       ${tabs()}${errorNotice()}
@@ -553,23 +562,62 @@ function findingArea(questionId, count, items) {
 }
 
 function moduleFooter() {
-  const isLast = state.moduleIndex === MODULES.length - 1;
-  return `<p class="footer-note">Las notas se mostrarán solo después del cierre.</p><div class="button-row">${state.moduleIndex > 0 ? '<button class="secondary" data-action="previous-module">Módulo anterior</button>' : '<span></span>'}<button class="primary" data-action="${isLast ? 'review' : 'next-module'}">${isLast ? 'Revisar cierre' : 'Siguiente módulo'}</button></div>`;
+  const isLast = state.moduleIndex === activeModules().length - 1;
+  const needsChoice = state.inspection.dailyManagementApplicable == null && state.moduleIndex === MODULES.length - 1;
+  return `<p class="footer-note">Las notas se mostrarán solo después del cierre.</p><div class="button-row">${state.moduleIndex > 0 ? '<button class="secondary" data-action="previous-module">Módulo anterior</button>' : '<span></span>'}<button class="primary" data-action="${isLast ? 'review' : 'next-module'}">${needsChoice ? 'Continuar' : isLast ? 'Revisar cierre' : 'Siguiente módulo'}</button></div>`;
+}
+
+function dailyManagementChoicePage() {
+  return `<section class="page-enter"><div class="eyebrow">25 preguntas 5S respondidas</div>
+    <h1>Gerenciamiento Diario</h1><p class="lead">¿Corresponde evaluar Gerenciamiento Diario en esta estación o inspección?</p>
+    <p>Si corresponde, responderás ocho preguntas adicionales. Su nota se registra por separado de la nota 5S.</p>
+    ${errorNotice()}<div class="button-row"><button class="secondary" data-action="daily-management-no">No corresponde · Cerrar</button><button class="primary" data-action="daily-management-yes">Sí corresponde</button></div>
+    <button class="secondary" data-action="back-to-module">Volver a las preguntas 5S</button></section>`;
+}
+
+function reviewOrChooseDailyManagement() {
+  if (!QUESTIONS.every(q => Number.isInteger(state.inspection.answers[q.id]) && state.inspection.answers[q.id] >= 0 && state.inspection.answers[q.id] <= 5)) {
+    state.error = 'Completa las 25 respuestas 5S antes de continuar.';
+    state.screen = 'module';
+  } else {
+    state.error = '';
+    state.screen = state.inspection.dailyManagementApplicable == null ? 'daily-management-choice' : 'review';
+  }
+  render();
+}
+
+function chooseDailyManagement(applicable) {
+  if (!QUESTIONS.every(q => Number.isInteger(state.inspection.answers[q.id]))) return reviewOrChooseDailyManagement();
+  if (applicable) {
+    state.inspection = { ...state.inspection, dailyManagementApplicable: true };
+    state.completedAt = '';
+    state.error = '';
+    state.moduleIndex = MODULES.length;
+    state.screen = 'module';
+    render();
+  } else {
+    // Keep the original intact until the user confirms the complete closure.
+    const candidate = { ...state.inspection, dailyManagementApplicable: false, answers: { ...state.inspection.answers }, findings: { ...state.inspection.findings } };
+    DAILY_MANAGEMENT.questions.forEach(q => { delete candidate.answers[q.id]; delete candidate.findings[q.id]; });
+    close(candidate);
+  }
 }
 
 function reviewPage() {
-  const inspection = validateInspection(state.inspection.answers, state.inspection.findings);
+  const inspection = validateInspection(state.inspection.answers, state.inspection.findings, activeQuestions());
   const kaizen = validateKaizenReviews(state.inspection.pendingKaizen, state.inspection.kaizenReviews);
   const checks = [
-    ['25 preguntas respondidas', inspection.missingQuestions.length === 0 && inspection.invalidQuestions.length === 0],
+    [`${activeQuestions().length} preguntas respondidas`, inspection.missingQuestions.length === 0 && inspection.invalidQuestions.length === 0],
+    ['Aplicabilidad de Gerenciamiento Diario definida', typeof state.inspection.dailyManagementApplicable === 'boolean'],
     ['Una foto por cada hallazgo', inspection.missingPhotos.length === 0 && inspection.extraFindings.length === 0],
     ['Kaizen pendientes revisados', kaizen.canContinue],
   ];
-  const ready = inspection.canClose && kaizen.canContinue;
+  const ready = inspection.canClose && kaizen.canContinue && typeof state.inspection.dailyManagementApplicable === 'boolean';
   return `
     <section class="page-enter">
       <div class="eyebrow">Cierre de inspección</div><h1>Revisa los faltantes</h1><p class="lead">Al cerrar, el QR de ${esc(stationName())} quedará bloqueado para esta semana.</p>
       ${checks.map(([label, complete]) => `<div class="check"><span class="check-mark ${complete ? 'done' : ''}">${complete ? '✓' : ''}</span><span>${label}</span></div>`).join('')}
+      <button class="secondary" data-action="change-daily-management">Cambiar si corresponde Gerenciamiento Diario</button>
       ${!ready ? `<div class="notice"><span class="notice-icon">!</span><span>Completa los elementos pendientes antes de cerrar. No se mostrará una nota parcial.</span></div>` : `<div class="notice good"><span class="notice-icon">✓</span><span>La inspección está completa y puede cerrarse.</span></div>`}${errorNotice()}
     </section>
       ${state.photoUploads ? '<p class="hint" role="status">Preparando fotografía en el teléfono…</p>' : ''}
@@ -585,6 +633,7 @@ function summaryPage() {
       <div class="eyebrow">Inspección cerrada</div><h1>Resumen final</h1>
       <div class="summary-hero"><small>Nota final</small><div class="summary-score"><strong>${number(result.finalScore)}</strong><span class="${scoreGood ? '' : 'low'}">${scoreGood ? 'SATISFACTORIA' : 'BAJO 4,0'}</span></div></div>
       ${MODULES.map(module => `<div class="score-row"><strong>${esc(module.title)}</strong><span class="${result.moduleScores[module.id] < 4 ? 'low' : ''}">${number(result.moduleScores[module.id])}</span></div>`).join('')}
+      ${result.dailyManagement ? `<div class="score-row"><strong>GERENCIAMIENTO DIARIO · Nota independiente</strong><span>${result.dailyManagement.applicable === true ? number(result.dailyManagement.score) : result.dailyManagement.applicable === false ? 'No aplica' : 'No evaluado'}</span></div>` : ''}
       <div class="notice ${result.completionStatus === 'vencida-cerrada-incompleta' ? 'danger' : 'good'}"><span class="notice-icon">${result.completionStatus === 'vencida-cerrada-incompleta' ? '!' : '✓'}</span><span>${result.completionStatus === 'vencida-cerrada-incompleta' ? 'Cerrada incompleta al vencer la semana; nota 0 en todos los módulos.' : result.completionStatus === 'cumplida-con-atraso' ? 'Cumplida con atraso.' : 'Cumplida.'} ${state.inspection.closedBy ? `Cerrada por ${esc(state.inspection.closedBy)}.` : ''}</span></div>
       <p class="small">${appConfig.mode === 'bridge' ? 'Registro guardado en Google Sheets y Drive.' : 'Prueba local: este resultado no se ha enviado a Google.'}</p>
     </section>`;
@@ -614,6 +663,7 @@ function render() {
   else if (state.screen === 'identity') content = identityPage();
   else if (state.screen === 'kaizen') content = kaizenPage();
   else if (state.screen === 'module') content = modulePage();
+  else if (state.screen === 'daily-management-choice') content = dailyManagementChoicePage();
   else if (state.screen === 'review') content = reviewPage();
   else if (state.screen === 'summary') content = summaryPage();
   else content = qrPage();
@@ -669,6 +719,7 @@ async function start() {
       state.screen = state.inspection.status === 'closed' && state.inspection.finalSessionId === state.sessionId ? 'summary' : 'identity';
       if (state.screen === 'identity') state.error = 'La inspección de esta estación y semana ya está cerrada o vencida. No se puede iniciar otra.';
     } else {
+      state.inspection.dailyManagementApplicable = null;
       state.screen = state.inspection.pendingKaizen.length ? 'kaizen' : 'module';
     }
     await draftSave();
@@ -816,7 +867,7 @@ async function continueKaizen() {
   render();
 }
 
-async function close() {
+async function close(candidate = state.inspection) {
   if (state.closing) return;
   if (state.photoUploads) {
     state.error = 'Espera a que termine de prepararse y guardarse la fotografía antes de cerrar.';
@@ -828,8 +879,13 @@ async function close() {
   render();
   try {
     if (!state.completedAt && currentWindow() === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
+    inspectionQuestions(candidate);
+    closeInspection(candidate, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
+    const gdText = candidate.dailyManagementApplicable === true ? 'incluyendo Gerenciamiento Diario' : 'sin Gerenciamiento Diario (no aplica)';
+    if (!window.confirm(`¿Confirmas cerrar la inspección de ${stationName()} ${gdText}? Se enviarán las respuestas y fotos y la estación quedará cerrada esta semana.`)) return;
+    state.inspection = candidate;
+    state.screen = 'review';
     if (appConfig.mode === 'bridge') {
-      closeInspection(state.inspection, { clientId: state.clientId, at: completedAt, completionStatus: completionStatus() });
       state.completedAt = completedAt;
       if (!navigator.onLine) throw new Error('Necesitas internet para cerrar. Mantén esta página abierta y reintenta cuando vuelva la conexión.');
       const receipt = await submitFinalInspection({ session: ensureBridgeSession(), inspection: state.inspection, sessionId: state.sessionId, occurredAt: completedAt, uploadCache: state.uploadCache,
@@ -868,7 +924,10 @@ appElement.addEventListener('click', event => {
   if (action === 'module') { state.moduleIndex = Number(target.dataset.index); state.screen = 'module'; persistDraftQuietly(); render(); }
   if (action === 'previous-module') { state.moduleIndex -= 1; persistDraftQuietly(); render(); }
   if (action === 'next-module') { state.moduleIndex += 1; persistDraftQuietly(); render(); }
-  if (action === 'review') { state.screen = 'review'; render(); }
+  if (action === 'review') reviewOrChooseDailyManagement();
+  if (action === 'daily-management-yes') chooseDailyManagement(true);
+  if (action === 'daily-management-no') chooseDailyManagement(false);
+  if (action === 'change-daily-management') { state.moduleIndex = MODULES.length - 1; state.screen = 'daily-management-choice'; render(); }
   if (action === 'back-to-module') { state.screen = 'module'; render(); }
   if (action === 'close') close();
   if (action === 'kaizen-decision') setKaizenDecision(target);

@@ -1,7 +1,6 @@
-import { MODULES, QUESTIONS } from './catalog.mjs';
+import { MODULES, QUESTIONS } from './catalog.mjs?v=20261001-gd';
 
 const validCount = value => Number.isInteger(value) && value >= 0 && value <= 5;
-const questionIds = new Set(QUESTIONS.map(question => question.id));
 
 export function scoreInspection(answers) {
   if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
@@ -30,7 +29,8 @@ export function scoreInspection(answers) {
   };
 }
 
-export function validateInspection(answers, findings = {}) {
+export function validateInspection(answers, findings = {}, questions = QUESTIONS) {
+  const questionIds = new Set(questions.map(question => question.id));
   const missingQuestions = [];
   const invalidQuestions = [];
   const missingPhotos = [];
@@ -38,7 +38,7 @@ export function validateInspection(answers, findings = {}) {
   const answerMap = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
   const findingMap = findings && typeof findings === 'object' && !Array.isArray(findings) ? findings : {};
 
-  for (const question of QUESTIONS) {
+  for (const question of questions) {
     if (!Object.hasOwn(answerMap, question.id) || answerMap[question.id] === null || answerMap[question.id] === '') {
       missingQuestions.push(question.id);
       continue;

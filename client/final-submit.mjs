@@ -28,7 +28,7 @@ export async function submitFinalInspection({ session, inspection, sessionId, oc
       : { decision: 'pending', reason: review.reason || '' };
   }
   onProgress('Guardando inspección completa…');
-  const receipt = await session.sendNow('submit-final', { sessionId, occurredAt, answers: { ...inspection.answers }, findings, kaizenReviews });
+  const receipt = await session.sendNow('submit-final', { sessionId, occurredAt, dailyManagementApplicable: inspection.dailyManagementApplicable, answers: { ...inspection.answers }, findings, kaizenReviews });
   if (receipt?.state?.status !== 'closed' || receipt.state.finalSessionId !== sessionId) {
     throw new Error('No llegó confirmación del cierre. Mantén esta página abierta y reintenta.');
   }

@@ -82,6 +82,7 @@ function app5sPublicState_(state) {
     takeover: state.takeover ? { ...state.takeover } : null,
     continuedBy: [...(state.continuedBy || [])],
     answers: { ...(state.answers || {}) },
+    dailyManagementApplicable: state.dailyManagementApplicable,
     findings: Object.fromEntries(Object.entries(state.findings || {}).map(([id, items]) => [id, items.map(item => ({ ...item, preview: undefined, dataUri: undefined }))])),
     pendingKaizen: (state.pendingKaizen || []).map(item => ({ ...item })),
     kaizenReviews: Object.fromEntries(Object.entries(state.kaizenReviews || {}).map(([id, review]) => [id, { ...review, preview: undefined, dataUri: undefined }])),
@@ -418,8 +419,8 @@ function app5sAdminKaizenState(filters) {
 
   const registry = app5sStationRegistry_();
   const names = new Map(registry.map(item => [item.id, item.name]));
-  const questions = new Map(QUESTIONS.map(question => [question.id, question]));
-  const moduleTitles = new Map(MODULES.map(module => [module.id, module.title]));
+  const questions = new Map([...QUESTIONS, ...DAILY_MANAGEMENT.questions].map(question => [question.id, question]));
+  const moduleTitles = new Map([...MODULES, DAILY_MANAGEMENT].map(module => [module.id, module.title]));
   const kaizenSheet = app5sSheet_('Kaizen');
   const findingSheet = app5sSheet_('Hallazgos');
   const reviewSheet = app5sSheet_('Revision Kaizen');
@@ -919,7 +920,7 @@ function app5sMaterializeKaizenReviews_(state) {
 function app5sMaterializeClosed_(state) {
   const inspectionId = `${state.stationId}:${state.week}`;
   app5sUpsert_('Inspecciones', 1, inspectionId, [inspectionId, state.stationId, state.week, state.status, state.startedBy, state.closedBy, state.startedAt, state.closedAt, state.result.finalScore, state.result.completionStatus, state.responsibleName || '']);
-  QUESTIONS.forEach(question => {
+  inspectionQuestions(state).forEach(question => {
     const responseId = `${inspectionId}:${question.id}`;
     const count = state.answers[question.id];
     app5sUpsert_('Respuestas', 1, responseId, [responseId, inspectionId, state.stationId, state.week, question.id, count, 5 - count, question.moduleId]);
@@ -936,7 +937,7 @@ function app5sMaterializeClosed_(state) {
 function app5sSyncProgress_(state) {
   const inspectionId = `${state.stationId}:${state.week}`;
   const activeFindingIds = new Set();
-  QUESTIONS.forEach(question => {
+  inspectionQuestions(state).forEach(question => {
     const count = state.answers[question.id];
     if (Number.isInteger(count)) {
       const responseId = `${inspectionId}:${question.id}`;
@@ -985,6 +986,14 @@ function app5sSyncProgress_(state) {
         moduleScores[index], state.result?.completionStatus || state.status, state.closedAt || '',
       ]);
     });
+    const gd = state.result?.dailyManagement;
+    if (gd && gd.applicable !== null) {
+      const recordId = `${inspectionId}:${DAILY_MANAGEMENT.id}`;
+      app5sUpsert_('Puntajes modulo', 1, recordId, [
+        recordId, inspectionId, state.stationId, state.week, DAILY_MANAGEMENT.title,
+        gd.applicable ? gd.score : '', gd.applicable ? state.result.completionStatus : 'No aplica', state.closedAt || '',
+      ]);
+    }
   }
 }
 

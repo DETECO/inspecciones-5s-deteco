@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const domainDirectory = path.join(__dirname, '..', 'domain');
-const orderedModules = ['catalog.mjs', 'scoring.mjs', 'kaizen.mjs', 'inspection.mjs', 'calendar.mjs'];
+const orderedModules = ['catalog.mjs', 'scoring.mjs', 'kaizen.mjs', 'daily-management.mjs', 'inspection.mjs', 'calendar.mjs'];
 
 function transpile(source) {
   return source

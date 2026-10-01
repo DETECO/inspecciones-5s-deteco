@@ -56,7 +56,17 @@ export const MODULES = Object.freeze([
 ]);
 
 export const QUESTIONS = Object.freeze(MODULES.flatMap(item => item.questions));
-const questionsById = new Map(QUESTIONS.map(question => [question.id, question]));
+export const DAILY_MANAGEMENT = module('gerenciamiento-diario', 'GERENCIAMIENTO DIARIO', [
+  ['GD-01', '¿Existe tablero GD logístico según el estándar definido por la organización?'],
+  ['GD-02', '¿Está el calendario de abastecimiento actualizado y según el estándar definido por la organización?'],
+  ['GD-03', '¿Se encuentra el control de inventario actualizado en el panel de GD logístico?'],
+  ['GD-04', '¿Se encuentra actualizado el nivel de servicio en el panel GD logístico, según el estándar definido?'],
+  ['GD-05', '¿Se encuentra actualizado el nivel de inventario en el panel GD logístico, según el estándar definido?'],
+  ['GD-06', '¿Se utiliza activamente la solución de problemas en el panel GD logístico, según el estándar definido?'],
+  ['GD-07', '¿Se realiza la reunión de GD logística de manera diaria?'],
+  ['GD-08', '¿Participa al menos uno de VO/AO/OT en la reunión de GD una vez a la semana?'],
+]);
+const questionsById = new Map([...QUESTIONS, ...DAILY_MANAGEMENT.questions].map(question => [question.id, question]));
 
 export function getQuestion(id) {
   return questionsById.get(id) ?? null;

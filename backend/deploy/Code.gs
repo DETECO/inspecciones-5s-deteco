@@ -138,7 +138,17 @@ const MODULES = Object.freeze([
 ]);
 
 const QUESTIONS = Object.freeze(MODULES.flatMap(item => item.questions));
-const questionsById = new Map(QUESTIONS.map(question => [question.id, question]));
+const DAILY_MANAGEMENT = module('gerenciamiento-diario', 'GERENCIAMIENTO DIARIO', [
+  ['GD-01', '¿Existe tablero GD logístico según el estándar definido por la organización?'],
+  ['GD-02', '¿Está el calendario de abastecimiento actualizado y según el estándar definido por la organización?'],
+  ['GD-03', '¿Se encuentra el control de inventario actualizado en el panel de GD logístico?'],
+  ['GD-04', '¿Se encuentra actualizado el nivel de servicio en el panel GD logístico, según el estándar definido?'],
+  ['GD-05', '¿Se encuentra actualizado el nivel de inventario en el panel GD logístico, según el estándar definido?'],
+  ['GD-06', '¿Se utiliza activamente la solución de problemas en el panel GD logístico, según el estándar definido?'],
+  ['GD-07', '¿Se realiza la reunión de GD logística de manera diaria?'],
+  ['GD-08', '¿Participa al menos uno de VO/AO/OT en la reunión de GD una vez a la semana?'],
+]);
+const questionsById = new Map([...QUESTIONS, ...DAILY_MANAGEMENT.questions].map(question => [question.id, question]));
 
 function getQuestion(id) {
   return questionsById.get(id) ?? null;
@@ -146,7 +156,6 @@ function getQuestion(id) {
 
 
 const validCount = value => Number.isInteger(value) && value >= 0 && value <= 5;
-const questionIds = new Set(QUESTIONS.map(question => question.id));
 
 function scoreInspection(answers) {
   if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
@@ -175,7 +184,8 @@ function scoreInspection(answers) {
   };
 }
 
-function validateInspection(answers, findings = {}) {
+function validateInspection(answers, findings = {}, questions = QUESTIONS) {
+  const questionIds = new Set(questions.map(question => question.id));
   const missingQuestions = [];
   const invalidQuestions = [];
   const missingPhotos = [];
@@ -183,7 +193,7 @@ function validateInspection(answers, findings = {}) {
   const answerMap = answers && typeof answers === 'object' && !Array.isArray(answers) ? answers : {};
   const findingMap = findings && typeof findings === 'object' && !Array.isArray(findings) ? findings : {};
 
-  for (const question of QUESTIONS) {
+  for (const question of questions) {
     if (!Object.hasOwn(answerMap, question.id) || answerMap[question.id] === null || answerMap[question.id] === '') {
       missingQuestions.push(question.id);
       continue;
@@ -268,6 +278,28 @@ function classifyNewFinding(stationId, choice, knownKaizen) {
   }
   throw new Error('Elige si el hallazgo es nuevo o corresponde a un kaizen abierto.');
 }
+
+
+function inspectionQuestions(state) {
+  const applicable = state.dailyManagementApplicable;
+  // Undefined identifies a legacy client, not an explicit No.
+  if (applicable !== undefined && typeof applicable !== 'boolean') {
+    throw new Error('Falta indicar si corresponde Gerenciamiento Diario.');
+  }
+  return applicable === true ? [...QUESTIONS, ...DAILY_MANAGEMENT.questions] : QUESTIONS;
+}
+
+function dailyManagementResult(state) {
+  inspectionQuestions(state);
+  if (state.dailyManagementApplicable !== true) {
+    if (DAILY_MANAGEMENT.questions.some(q => Object.hasOwn(state.answers, q.id) || state.findings[q.id]?.length)) {
+      throw new Error('Gerenciamiento Diario no corresponde; hay respuestas o fotos de ese módulo.');
+    }
+    return { applicable: state.dailyManagementApplicable ?? null, score: null };
+  }
+  return { applicable: true, score: DAILY_MANAGEMENT.questions.reduce((total, q) => total + 5 - state.answers[q.id], 0) / DAILY_MANAGEMENT.questions.length };
+}
+
 
 
 
@@ -437,7 +469,7 @@ function releaseInspection(state, { clientId, at } = {}) {
 function closeInspection(state, { clientId, at, completionStatus = 'cumplida' } = {}) {
   requireEditor(state, clientId);
   if (!completionStatuses.has(completionStatus)) throw new Error('Estado de cumplimiento inválido.');
-  const inspectionValidation = validateInspection(state.answers, state.findings);
+  const inspectionValidation = validateInspection(state.answers, state.findings, inspectionQuestions(state));
   if (!inspectionValidation.canClose) {
     if (inspectionValidation.missingPhotos.length) throw new Error('Falta una fotografía sincronizada por cada hallazgo.');
     if (inspectionValidation.extraFindings.length) throw new Error('Confirma o elimina los hallazgos sobrantes antes de cerrar.');
@@ -453,7 +485,7 @@ function closeInspection(state, { clientId, at, completionStatus = 'cumplida' } 
     takeover: null,
     closedAt,
     closedBy: state.editor.inspectorName,
-    result: { ...scores, completionStatus },
+    result: { ...scores, completionStatus, dailyManagement: dailyManagementResult(state) },
   });
 }
 
@@ -737,20 +769,22 @@ function app5sFinalSnapshot_(lease, payload, now) {
   const windowState = inspectionWindow(at, true);
   if (windowState === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
   const answers = payload.answers;
-  if (!answers || Array.isArray(answers) || Object.keys(answers).length !== QUESTIONS.length || QUESTIONS.some(q => !Object.hasOwn(answers, q.id) || !Number.isInteger(answers[q.id]) || answers[q.id] < 0 || answers[q.id] > 5)) throw new Error('Faltan respuestas o hay valores inválidos antes del cierre.');
+  const questions = inspectionQuestions(payload);
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || Object.keys(answers).length !== questions.length || questions.some(q => !Object.hasOwn(answers, q.id) || !Number.isInteger(answers[q.id]) || answers[q.id] < 0 || answers[q.id] > 5)) throw new Error('Faltan respuestas o hay valores inválidos antes del cierre.');
   const state = app5sFinalState_(lease.stationId, lease.week, lease);
+  state.dailyManagementApplicable = payload.dailyManagementApplicable;
   const proofs = app5sFinalPhotos_(lease);
   const usedPhotos = new Set();
   const usedIds = new Set();
   const findingMap = payload.findings || {};
-  if (Array.isArray(findingMap) || Object.keys(findingMap).some(id => !QUESTIONS.some(q => q.id === id))) throw new Error('Hallazgos inválidos.');
+  if (Array.isArray(findingMap) || Object.keys(findingMap).some(id => !questions.some(q => q.id === id))) throw new Error('Hallazgos inválidos.');
   function ownPhoto(photoId, category) {
     if (!proofs.some(item => item.photoId === photoId && item.category === category) || usedPhotos.has(photoId)) throw new Error('Falta una fotografía propia y distinta por cada hallazgo o solución.');
     usedPhotos.add(photoId);
     return photoId;
   }
   state.answers = { ...answers };
-  QUESTIONS.forEach(question => {
+  questions.forEach(question => {
     const items = findingMap[question.id] || [];
     if (!Array.isArray(items) || items.length !== answers[question.id]) throw new Error('Falta una fotografía por cada hallazgo o hay fotografías sobrantes.');
     state.findings[question.id] = items.map(item => {
@@ -929,6 +963,7 @@ function app5sPublicState_(state) {
     takeover: state.takeover ? { ...state.takeover } : null,
     continuedBy: [...(state.continuedBy || [])],
     answers: { ...(state.answers || {}) },
+    dailyManagementApplicable: state.dailyManagementApplicable,
     findings: Object.fromEntries(Object.entries(state.findings || {}).map(([id, items]) => [id, items.map(item => ({ ...item, preview: undefined, dataUri: undefined }))])),
     pendingKaizen: (state.pendingKaizen || []).map(item => ({ ...item })),
     kaizenReviews: Object.fromEntries(Object.entries(state.kaizenReviews || {}).map(([id, review]) => [id, { ...review, preview: undefined, dataUri: undefined }])),
@@ -1265,8 +1300,8 @@ function app5sAdminKaizenState(filters) {
 
   const registry = app5sStationRegistry_();
   const names = new Map(registry.map(item => [item.id, item.name]));
-  const questions = new Map(QUESTIONS.map(question => [question.id, question]));
-  const moduleTitles = new Map(MODULES.map(module => [module.id, module.title]));
+  const questions = new Map([...QUESTIONS, ...DAILY_MANAGEMENT.questions].map(question => [question.id, question]));
+  const moduleTitles = new Map([...MODULES, DAILY_MANAGEMENT].map(module => [module.id, module.title]));
   const kaizenSheet = app5sSheet_('Kaizen');
   const findingSheet = app5sSheet_('Hallazgos');
   const reviewSheet = app5sSheet_('Revision Kaizen');
@@ -1766,7 +1801,7 @@ function app5sMaterializeKaizenReviews_(state) {
 function app5sMaterializeClosed_(state) {
   const inspectionId = `${state.stationId}:${state.week}`;
   app5sUpsert_('Inspecciones', 1, inspectionId, [inspectionId, state.stationId, state.week, state.status, state.startedBy, state.closedBy, state.startedAt, state.closedAt, state.result.finalScore, state.result.completionStatus, state.responsibleName || '']);
-  QUESTIONS.forEach(question => {
+  inspectionQuestions(state).forEach(question => {
     const responseId = `${inspectionId}:${question.id}`;
     const count = state.answers[question.id];
     app5sUpsert_('Respuestas', 1, responseId, [responseId, inspectionId, state.stationId, state.week, question.id, count, 5 - count, question.moduleId]);
@@ -1783,7 +1818,7 @@ function app5sMaterializeClosed_(state) {
 function app5sSyncProgress_(state) {
   const inspectionId = `${state.stationId}:${state.week}`;
   const activeFindingIds = new Set();
-  QUESTIONS.forEach(question => {
+  inspectionQuestions(state).forEach(question => {
     const count = state.answers[question.id];
     if (Number.isInteger(count)) {
       const responseId = `${inspectionId}:${question.id}`;
@@ -1832,6 +1867,14 @@ function app5sSyncProgress_(state) {
         moduleScores[index], state.result?.completionStatus || state.status, state.closedAt || '',
       ]);
     });
+    const gd = state.result?.dailyManagement;
+    if (gd && gd.applicable !== null) {
+      const recordId = `${inspectionId}:${DAILY_MANAGEMENT.id}`;
+      app5sUpsert_('Puntajes modulo', 1, recordId, [
+        recordId, inspectionId, state.stationId, state.week, DAILY_MANAGEMENT.title,
+        gd.applicable ? gd.score : '', gd.applicable ? state.result.completionStatus : 'No aplica', state.closedAt || '',
+      ]);
+    }
   }
 }
 

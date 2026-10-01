@@ -93,3 +93,26 @@ test('cierre incompleto no escribe datos y estado es solo lectura', () => {
   assert.throws(() => h.call('submit-final', { answers: {}, findings: {}, kaizenReviews: {}, occurredAt: '2026-09-30T15:00:00Z' }), /respuesta/);
   assert.equal(h.writes(), 0);
 });
+
+test('cierre GD guarda33respuestas con nota independiente y no admite decisión inválida', () => {
+  const h = harness();
+  h.call('begin-final');
+  const answers = Object.fromEntries(vm.runInContext('QUESTIONS.map(q => [q.id, 0])', h.context));
+  for (let i = 1; i <= 8; i++) answers[`GD-0${i}`] = 0;
+  const input = { answers, dailyManagementApplicable: true, findings: {}, kaizenReviews: {}, occurredAt: '2026-09-30T15:00:00Z' };
+  assert.throws(() => h.call('submit-final', { ...input, dailyManagementApplicable: 'true' }), /Gerenciamiento Diario/);
+  assert.equal(h.writes(), 0);
+  const result = h.call('submit-final', input).state;
+  assert.equal(Object.keys(result.answers).length, 33);
+  assert.equal(result.result.finalScore, 5);
+  assert.equal(result.result.dailyManagement.score, 5);
+});
+
+test('No aplica registra decisión explícita y no exige las ocho GD', () => {
+  const h = harness();
+  h.call('begin-final');
+  const answers = Object.fromEntries(vm.runInContext('QUESTIONS.map(q => [q.id, 0])', h.context));
+  const result = h.call('submit-final', { answers, dailyManagementApplicable: false, findings: {}, kaizenReviews: {}, occurredAt: '2026-09-30T15:00:00Z' }).state;
+  assert.equal(result.result.dailyManagement.applicable, false);
+  assert.equal(result.result.dailyManagement.score, null);
+});

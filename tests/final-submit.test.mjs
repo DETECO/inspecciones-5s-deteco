@@ -30,3 +30,10 @@ test('reintentar cierre conserva ID de fotos y reutiliza uploads confirmados', a
 test('sin cierre confirmado no se anuncia éxito', async () => {
   await assert.rejects(submitFinalInspection({ session: { async sendNow() { return {}; } }, inspection: { answers: {}, findings: {}, kaizenReviews: {} }, sessionId: 'session-12345678', occurredAt: '2026-09-30T15:00:00Z', uploadCache: new Map() }), /confirmación/);
 });
+
+test('snapshot final incluye decisión GD explícita sin nota calculada por cliente', async () => {
+  let sent;
+  await submitFinalInspection({ session: { async sendNow(operation, payload) { sent = payload; return { state: { status: 'closed', finalSessionId: payload.sessionId } }; } }, inspection: { answers: {}, findings: {}, kaizenReviews: {}, dailyManagementApplicable: false }, sessionId: 'session-12345678', occurredAt: '2026-09-30T15:00:00Z', uploadCache: new Map() });
+  assert.equal(sent.dailyManagementApplicable, false);
+  assert.equal(sent.result, undefined);
+});

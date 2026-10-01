@@ -1,6 +1,7 @@
-import { MODULES, getQuestion } from './catalog.mjs';
-import { scoreInspection, validateInspection } from './scoring.mjs';
+import { MODULES, getQuestion } from './catalog.mjs?v=20261001-gd';
+import { scoreInspection, validateInspection } from './scoring.mjs?v=20261001-gd';
 import { validateKaizenReviews } from './kaizen.mjs';
+import { inspectionQuestions, dailyManagementResult } from './daily-management.mjs?v=20261001-gd';
 
 const completionStatuses = new Set(['cumplida', 'cumplida-con-atraso']);
 
@@ -167,7 +168,7 @@ export function releaseInspection(state, { clientId, at } = {}) {
 export function closeInspection(state, { clientId, at, completionStatus = 'cumplida' } = {}) {
   requireEditor(state, clientId);
   if (!completionStatuses.has(completionStatus)) throw new Error('Estado de cumplimiento inválido.');
-  const inspectionValidation = validateInspection(state.answers, state.findings);
+  const inspectionValidation = validateInspection(state.answers, state.findings, inspectionQuestions(state));
   if (!inspectionValidation.canClose) {
     if (inspectionValidation.missingPhotos.length) throw new Error('Falta una fotografía sincronizada por cada hallazgo.');
     if (inspectionValidation.extraFindings.length) throw new Error('Confirma o elimina los hallazgos sobrantes antes de cerrar.');
@@ -183,7 +184,7 @@ export function closeInspection(state, { clientId, at, completionStatus = 'cumpl
     takeover: null,
     closedAt,
     closedBy: state.editor.inspectorName,
-    result: { ...scores, completionStatus },
+    result: { ...scores, completionStatus, dailyManagement: dailyManagementResult(state) },
   });
 }
 

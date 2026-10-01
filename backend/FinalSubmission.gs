@@ -80,20 +80,22 @@ function app5sFinalSnapshot_(lease, payload, now) {
   const windowState = inspectionWindow(at, true);
   if (windowState === 'closed') throw new Error('La inspección no puede cerrarse fuera del horario permitido.');
   const answers = payload.answers;
-  if (!answers || Array.isArray(answers) || Object.keys(answers).length !== QUESTIONS.length || QUESTIONS.some(q => !Object.hasOwn(answers, q.id) || !Number.isInteger(answers[q.id]) || answers[q.id] < 0 || answers[q.id] > 5)) throw new Error('Faltan respuestas o hay valores inválidos antes del cierre.');
+  const questions = inspectionQuestions(payload);
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers) || Object.keys(answers).length !== questions.length || questions.some(q => !Object.hasOwn(answers, q.id) || !Number.isInteger(answers[q.id]) || answers[q.id] < 0 || answers[q.id] > 5)) throw new Error('Faltan respuestas o hay valores inválidos antes del cierre.');
   const state = app5sFinalState_(lease.stationId, lease.week, lease);
+  state.dailyManagementApplicable = payload.dailyManagementApplicable;
   const proofs = app5sFinalPhotos_(lease);
   const usedPhotos = new Set();
   const usedIds = new Set();
   const findingMap = payload.findings || {};
-  if (Array.isArray(findingMap) || Object.keys(findingMap).some(id => !QUESTIONS.some(q => q.id === id))) throw new Error('Hallazgos inválidos.');
+  if (Array.isArray(findingMap) || Object.keys(findingMap).some(id => !questions.some(q => q.id === id))) throw new Error('Hallazgos inválidos.');
   function ownPhoto(photoId, category) {
     if (!proofs.some(item => item.photoId === photoId && item.category === category) || usedPhotos.has(photoId)) throw new Error('Falta una fotografía propia y distinta por cada hallazgo o solución.');
     usedPhotos.add(photoId);
     return photoId;
   }
   state.answers = { ...answers };
-  QUESTIONS.forEach(question => {
+  questions.forEach(question => {
     const items = findingMap[question.id] || [];
     if (!Array.isArray(items) || items.length !== answers[question.id]) throw new Error('Falta una fotografía por cada hallazgo o hay fotografías sobrantes.');
     state.findings[question.id] = items.map(item => {

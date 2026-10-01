@@ -182,6 +182,33 @@ test('administración muestra y libera reserva nueva sin escribir ni borrar resp
   assert.equal(call(h, 'begin-final', { ...input, clientId: 'phone-b', sessionId: 'other-session-123456' }).state.status, 'open');
 });
 
+test('GD final se registra en Sheet, crea Kaizen visible y ordena foto por mes y semana ISO', () => {
+  const h = harness();
+  h.api.instalarApp5SCompleta();
+  const book = h.books.get(h.props.APP5S_SHEET_ID);
+  const input = { stationId: 'bodega', accessToken: accessFor(h, 'bodega'), clientId: 'phone-a', sessionId: 'gd-session-12345678', inspectorName: 'Prueba GD' };
+  call(h, 'begin-final', input);
+  const photo = call(h, 'upload-final-photo', { ...input, photoId: 'finding-gd-1234', category: 'Hallazgos', dataUri: 'data:image/jpeg;base64,AAAA' });
+  assert.equal(book.getSheetByName('Respuestas').rows.length, 1);
+  const answers = Object.fromEntries(h.api.QUESTIONS.map(q => [q.id, 0]));
+  for (let i = 1; i <= 8; i++) answers[`GD-0${i}`] = i === 1 ? 1 : 0;
+  const completed = { ...input, dailyManagementApplicable: true, answers, findings: { 'GD-01': [{ id: 'finding-gd-1234', photoId: photo.photoId, note: 'Falta tablero GD' }] }, kaizenReviews: {}, occurredAt: '2026-09-21T11:15:00Z' };
+  const closed = call(h, 'submit-final', completed).state;
+  assert.equal(closed.dailyManagementApplicable, true);
+  assert.equal(closed.result.finalScore, 5);
+  assert.equal(closed.result.dailyManagement.score, 4.875);
+  assert.equal(book.getSheetByName('Respuestas').rows.length, 34);
+  assert.equal(book.getSheetByName('Puntajes modulo').rows.length, 7);
+  const item = h.api.app5sAdminKaizenState({ stationId: 'bodega', status: 'all' }).items[0];
+  assert.equal(item.questionText, '¿Existe tablero GD logístico según el estándar definido por la organización?');
+  assert.equal(item.moduleTitle, 'GERENCIAMIENTO DIARIO');
+  const folder = h.root.getFoldersByName('INSPECCIONES 5S').next().getFoldersByName('BODEGA').next().getFoldersByName('2026-09').next().getFoldersByName('2026-W39').next().getFoldersByName('Hallazgos').next();
+  assert.equal(folder.files.length, 1);
+  const beforeRetry = JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows])));
+  call(h, 'submit-final', completed);
+  assert.equal(JSON.stringify(Object.fromEntries(Object.entries(book.sheets).map(([name, sheet]) => [name, sheet.rows]))), beforeRetry);
+});
+
 test('un administrador activo de solo lectura puede ver el panel, pero no liberar ni configurar', () => {
   const h = harness();
   h.api.instalarApp5SCompleta();
