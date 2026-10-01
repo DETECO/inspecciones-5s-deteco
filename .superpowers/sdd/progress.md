@@ -10,6 +10,8 @@ Base funcional: 81938518ab0b9b19159c0fedb61e305abcc4b1f1. Rama: codex/admin-sett
 - Integración de bundles terminada, revisión independiente aplicada y 202 pruebas integradas aprobadas, 0 fallos.
 - Verificación remota detectó regreso de cuenta al iframe; doGet ahora inserta la dirección real del despliegue. Prueba de regresión incluida.
 - Respaldo del despliegue actual versión 7 guardado en tmp/app5s-admin-backup-20261001.
-- Apps Script: versión 9 activa en el mismo deployment. Panel HTTP200, menú y retorno de cuenta comprobados en el navegador. Solicitud final-state con QR falso lee Accesos y devuelve «Acceso QR inválido», sin escribir ni reservar estación. GitHub y Pages pendientes.
+- Apps Script: versión 9 activa en el mismo deployment. Panel HTTP200, menú y retorno de cuenta comprobados en el navegador. Solicitud final-state con QR falso lee Accesos y devuelve «Acceso QR inválido», sin escribir ni reservar estación.
+- GitHub: feature 8297539385f4ea6d6119b5c5fff33483f9b16f37 publicado en main. Pages build and deployment 36910214477 terminado success. index.html, styles.css, client/app.mjs, domain/calendar.mjs y settings.svg responden HTTP200 y coinciden con el código comprobado. Portada pública renderizada en navegador.
+- Avisos: código disponible, sin destinatarios ni activación cambiados. Para usarlo, configurar destinatarios y habilitar; el propietario debe ejecutar autorizarAvisosApp5S y conceder permisos de Google una vez. No hay comprobación de entrega real de correo ni inspección completa nueva realizada por el asistente.
 
 No se han cambiado datos operativos ni enviado correos de prueba. El nuevo enlace superior vuelve al escáner y no cierra Google.

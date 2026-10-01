@@ -42,5 +42,5 @@ Archivos: backend/Admin.html, backend/build-deploy.cjs, index.html y tests/admin
 ## Task 5: Publicación
 - [x] Respaldar Apps Script versión activa 7; generar release y verificar coincidencia/sintaxis/manifest.
 - [x] Publicar nueva versión en deployment existente sin modificar acceso ni scopes por cuenta propia. Si Google exige autorización adicional, entregar instrucción y no declarar envíos activos.
-- [ ] Commit de feature, merge fast-forward y push main; verificar Actions exitoso y archivos Pages HTTP200 idénticos.
-- [ ] Informar publicación, pruebas y autorización pendiente solo si aplica.
+- [x] Commit de feature, merge fast-forward y push main; verificar Actions exitoso y archivos Pages HTTP200 idénticos.
+- [x] Informe de publicación y pruebas en .superpowers/sdd/progress.md. Avisos pendientes de destinatarios y autorización de Google por el propietario; sin envíos reales de prueba.

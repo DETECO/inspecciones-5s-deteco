@@ -24,4 +24,4 @@
 
 `node --test backend/tests/notifications.test.cjs`: rojo inicial por funciones ausentes (6 fallos); rojo de la mejora de cola por envío síncrono (1 fallo); rojo de cuota por pérdida de destinatario pendiente (1 fallo); rojo de bloqueo retenido durante MailApp (5 fallos de los escenarios de envío); rojo por excepción al consultar cuota (1 fallo). Resultado final: **9 pruebas aprobadas, 0 fallidas**. Una consulta de cuota fallida queda pendiente y puede reintentarse sin marcar como incierto un correo que aún no se intentó enviar.
 
-No se verificó autorización de Google ni entrega de correo real: requieren instalación y ejecución del propietario. Tampoco se creó trigger ni se modificó el despliegue remoto en esta tarea.
+No se verificó autorización de Google ni entrega de correo real: requieren instalación y ejecución del propietario. No se creó trigger ni se enviaron correos. La integración final del root está desplegada como versión 9 del proyecto real y publicada en GitHub, con 202 pruebas integradas aprobadas; el permiso humano aprobado no sustituye el consentimiento que Google solicitará al propietario al activar estos servicios.
