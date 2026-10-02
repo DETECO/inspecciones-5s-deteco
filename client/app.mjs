@@ -5,7 +5,8 @@ import { validateInspection } from '../domain/scoring.mjs?v=20261001-gd';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
 import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
-import { createFormBridge } from '../transport/form-client.mjs';
+import { createFormBridge } from '../transport/form-client.mjs?v=20261002-status';
+import { inspectionStatus } from './inspection-status.mjs?v=20261002-status';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
 import { readImageForUpload } from './image-upload.mjs';
@@ -44,6 +45,8 @@ const state = {
   scanNotice: '',
   qrValidationPending: false,
   qrAccessValidated: false,
+  serverTime: null,
+  serverCheckedAt: null,
   flashAvailable: false,
   flashOn: false,
   closing: false,
@@ -58,6 +61,8 @@ let qrScanner = null;
 let scannerNavigationPending = false;
 let lastInvalidQr = '';
 let lastInvalidQrAt = 0;
+let accessGeneration = 0;
+let statusClockTimer = null;
 
 if (!localStorage.getItem(clientKey)) localStorage.setItem(clientKey, state.clientId);
 
@@ -94,13 +99,8 @@ async function initializeApp() {
   if (state.route) {
     try {
       if (appConfig.mode === 'bridge') {
-        ensureBridgeSession();
-        state.qrValidationPending = false;
-        state.qrAccessValidated = false;
-        state.scanNotice = navigator.onLine
-          ? `QR leído: ${state.station.name}. Ingresa tu nombre para validar y comenzar.`
-          : `QR leído: ${state.station.name}. Necesitas internet para iniciar.`;
-        state.syncStatus = state.syncQueue.length ? 'Pendiente de envío' : navigator.onLine ? 'Listo para validar' : 'Sin conexión';
+        await validateStationAccess();
+        return;
       } else {
         state.qrValidationPending = false;
         state.qrAccessValidated = true;
@@ -115,6 +115,63 @@ async function initializeApp() {
     }
   }
   render();
+}
+
+function recordServerClock(receipt) {
+  const time = new Date(receipt.receivedAt).getTime();
+  if (Number.isFinite(time)) {
+    state.serverTime = time;
+    state.serverCheckedAt = new Date().getTime();
+    state.week = isoWeekChile(new Date(time));
+  }
+}
+
+function inspectionNow() {
+  return state.serverTime !== null
+    ? new Date(state.serverTime + new Date().getTime() - state.serverCheckedAt)
+    : new Date();
+}
+
+function displayedStatus(ignoreError = false) {
+  return inspectionStatus({ online: navigator.onLine, checking: state.qrValidationPending,
+    validated: state.qrAccessValidated, serverConfirmed: appConfig.mode !== 'bridge' || state.serverTime !== null,
+    error: ignoreError ? '' : state.error, inspection: state.inspection, clientId: state.clientId,
+    now: inspectionNow(), identity: state.screen === 'identity', closing: state.closing, progress: state.syncStatus });
+}
+
+function scheduleStatusClock() {
+  window.clearTimeout?.(statusClockTimer);
+  statusClockTimer = null;
+  if (state.screen !== 'identity' || state.serverTime === null) return;
+  statusClockTimer = window.setTimeout?.(() => {
+    if (state.screen !== 'identity') return;
+    if (document.querySelector('#inspection-status-dialog')?.open) scheduleStatusClock();
+    else render();
+  }, 30000);
+}
+
+async function validateStationAccess() {
+  if (!state.route || state.screen !== 'identity' || state.qrValidationPending) return;
+  const generation = ++accessGeneration;
+  state.error = '';
+  state.qrAccessValidated = false;
+  if (!navigator.onLine) { render(); return; }
+  state.qrValidationPending = true;
+  render();
+  try {
+    const receipt = await ensureBridgeSession().sendNow('final-state', { sessionId: state.sessionId });
+    if (generation !== accessGeneration || state.screen !== 'identity') return;
+    if (!receipt?.state || !Number.isFinite(new Date(receipt.receivedAt).getTime())) throw new Error('No se pudo confirmar la disponibilidad. Pulsa Volver a comprobar.');
+    state.inspection = receipt.state;
+    recordServerClock(receipt);
+    if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
+    if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
+    state.qrAccessValidated = true;
+  } catch (error) {
+    if (generation === accessGeneration) state.error = error.message;
+  } finally {
+    if (generation === accessGeneration) { state.qrValidationPending = false; render(); }
+  }
 }
 
 function esc(value = '') {
@@ -176,7 +233,7 @@ function storageReadFromSession(key) {
 }
 
 function currentWindow() {
-  return inspectionWindow(new Date(), Boolean(state.inspection?.startedAt), state.inspection?.schedule || undefined);
+  return inspectionWindow(inspectionNow(), Boolean(state.inspection?.startedAt), state.inspection?.schedule || undefined);
 }
 
 function completionStatus() {
@@ -209,6 +266,7 @@ function syncLabel() {
 }
 
 function header() {
+  const status = displayedStatus();
   const logo = '<img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción">';
   if (state.screen === 'scanner') {
     return `
@@ -233,10 +291,14 @@ function header() {
       <div class="header-inner">
         <div class="brand-row"><div class="brand">${logo}</div><div class="header-actions">${state.route ? '<span class="mode-pill">5S semanal</span>' : ''}${adminButton}</div></div>
         ${state.route ? `<div class="context-row"><div><div class="context-label">Inspección 5S</div><div class="context-title">${esc(title)}</div></div><span class="week">${esc(state.week.key.replace('-W', ' · S'))}</span></div>` : ''}
-        ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><span class="sync-pill ${navigator.onLine && state.syncStatus === 'Sincronizado' ? '' : 'offline'}"><i class="sync-dot"></i>${esc(syncLabel())}</span></div>` : ''}
+        ${state.route ? `<div class="state-row"><span class="state-copy">${esc(text)}</span><button type="button" class="sync-pill status-${status.tone}" data-action="show-inspection-status" aria-haspopup="dialog" aria-controls="inspection-status-dialog" aria-label="Estado: ${esc(status.label)}. Ver detalle"><i class="sync-dot" aria-hidden="true"></i>${esc(status.label)}</button></div>` : ''}
         ${state.route ? `<div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div>` : ''}
       </div>
-    </header>`;
+    </header>${state.route ? inspectionStatusDialog(status) : ''}`;
+}
+
+function inspectionStatusDialog(status) {
+  return `<dialog id="inspection-status-dialog" class="help-dialog status-dialog" aria-labelledby="inspection-status-title" aria-describedby="inspection-status-reason"><div class="help-dialog-body"><h2 id="inspection-status-title">Estado: ${esc(status.label)}</h2><p id="inspection-status-reason">${esc(status.reason)}</p><div class="button-row">${state.screen === 'identity' && !state.qrValidationPending ? '<button class="secondary" type="button" data-action="retry-status">Volver a comprobar</button>' : ''}<button class="primary" type="button" data-action="close-inspection-status">Entendido</button></div></div></dialog>`;
 }
 
 function errorNotice() {
@@ -419,12 +481,18 @@ async function handleScannedQr(result) {
 }
 
 function openScanner() {
+  accessGeneration += 1;
   disposeQrScanner();
   scannerNavigationPending = false;
   state.scanError = '';
   state.scanNotice = '';
   state.qrValidationPending = false;
   state.qrAccessValidated = false;
+  state.serverTime = null;
+  state.serverCheckedAt = null;
+  state.error = '';
+  state.inspection = null;
+  state.bridgeSession = null;
   state.flashAvailable = false;
   state.flashOn = false;
   state.screen = 'scanner';
@@ -476,18 +544,14 @@ function identityPage() {
     && navigator.onLine
     && !heldByOther
     && !unavailable
-    && (appConfig.mode === 'bridge' || currentWindow() === 'open');
+    && (appConfig.mode === 'bridge' ? displayedStatus(true).tone === 'green' : currentWindow() === 'open');
   const names = [...new Set([...state.knownInspectors, ...storageRead(namesKey, [])].map(name => String(name).trim()).filter(Boolean))]
     .map(name => `<option value="${esc(name)}"></option>`).join('');
   return `
     <section class="page-enter">
       <div class="eyebrow">Nueva inspección</div>
-      ${state.scanNotice ? `<div class="notice ${state.qrAccessValidated ? 'good' : ''}"><span class="notice-icon">${state.qrAccessValidated ? '✓' : 'i'}</span><span>${esc(state.scanNotice)}</span></div>` : ''}
       <h1>Identifícate para comenzar</h1>
       <p class="lead">Completa la inspección sin cerrar esta página. Las respuestas y fotos se envían únicamente al cerrar.</p>
-      ${heldByOther ? `<div class="notice"><span class="notice-icon">!</span><span>La estación está reservada por ${esc(state.inspection.editor.inspectorName)}. Solicita su liberación al administrador si esa inspección fue abandonada.</span></div>` : ''}
-      ${appConfig.mode === 'bridge' && !navigator.onLine ? '<div class="notice"><span class="notice-icon">!</span><span>Necesitas internet para validar el QR e iniciar una nueva inspección.</span></div>' : ''}
-      ${scheduleMessage()}${errorNotice()}
       <div class="field"><label for="inspector-name">Nombre del inspector</label><input class="input" id="inspector-name" list="known-inspectors" maxlength="80" autocomplete="name" value="${esc(state.inspectorName)}" placeholder="Escribe o selecciona tu nombre"><datalist id="known-inspectors">${names}</datalist><p class="hint">Si no apareces, escribe tu nombre y se agregará para próximas inspecciones.</p></div>
       <button class="primary" data-action="start" ${canStart && navigator.onLine ? '' : 'disabled'}>Iniciar inspección</button>
       ${appConfig.mode === 'bridge' && !state.qrAccessValidated ? '<div class="identity-recovery"><button class="help-link" type="button" data-action="rescan-qr">Volver a escanear QR</button></div>' : ''}
@@ -679,6 +743,7 @@ function render() {
       if (selectionStart !== null && selectionEnd !== null) restoredInput.setSelectionRange(selectionStart, selectionEnd);
     }
   }
+  scheduleStatusClock();
 }
 
 async function start() {
@@ -693,7 +758,6 @@ async function start() {
   state.error = '';
   if (appConfig.mode === 'bridge' && navigator.onLine) {
     state.qrValidationPending = true;
-    state.scanNotice = `Validando el QR de ${state.station.name} y reservando la inspección…`;
     render();
   }
   try {
@@ -704,6 +768,7 @@ async function start() {
         const receipt = await ensureBridgeSession().sendNow('begin-final', { inspectorName: name, sessionId: state.sessionId });
         if (!receipt?.state) throw new Error('No llegó confirmación del inicio. Inténtalo nuevamente.');
         state.inspection = receipt.state;
+        recordServerClock(receipt);
         if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
         if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
         if (receipt.previousWeekAlert) state.previousWeekAlert = receipt.previousWeekAlert;
@@ -733,6 +798,7 @@ async function start() {
     if (appConfig.mode === 'bridge' && navigator.onLine) {
       try {
         const receipt = await ensureBridgeSession().sendNow('final-state', { sessionId: state.sessionId });
+        recordServerClock(receipt);
         if (receipt.station?.id === state.route.stationId) state.station = receipt.station;
         if (Array.isArray(receipt.inspectorNames)) state.knownInspectors = receipt.inspectorNames;
         if (receipt.state) state.inspection = receipt.state;
@@ -876,7 +942,7 @@ async function close(candidate = state.inspection) {
     render();
     return;
   }
-  const completedAt = state.completedAt || new Date().toISOString();
+  const completedAt = state.completedAt || inspectionNow().toISOString();
   state.closing = true;
   render();
   try {
@@ -913,6 +979,9 @@ appElement.addEventListener('click', event => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
+  if (action === 'show-inspection-status') { render(); document.querySelector('#inspection-status-dialog')?.showModal(); return; }
+  if (action === 'close-inspection-status') { document.querySelector('#inspection-status-dialog')?.close(); return; }
+  if (action === 'retry-status') { document.querySelector('#inspection-status-dialog')?.close(); validateStationAccess(); return; }
   if (state.closing) return;
   if (action === 'open-scanner') openScanner();
   if (action === 'rescan-qr') openScanner();
@@ -952,9 +1021,11 @@ appElement.addEventListener('input', event => {
 });
 
 window.addEventListener('online', async () => {
-  render();
+  if (state.screen === 'identity') await validateStationAccess();
+  else render();
 });
 window.addEventListener('offline', render);
+window.addEventListener('focus', () => { if (state.screen === 'identity') render(); });
 window.addEventListener('pagehide', disposeQrScanner);
 window.addEventListener('beforeunload', event => {
   if (state.inspection?.status === 'open') {

@@ -59,6 +59,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #52cf93; }
 .sync-pill.offline { border-color: #f4d4be; color: #87420f; background: #fff8f2; }
 .sync-pill.offline .sync-dot { background: var(--orange); }
+.sync-pill.status-green { border-color: #b8ddc4; color: #286343; background: var(--green-pale); }
+.status-green .sync-dot { background: var(--green); }
+.sync-pill.status-amber { border-color: #edd3a9; color: #865015; background: #fff8e9; }
+.status-amber .sync-dot { background: #d18a13; }
+.sync-pill.status-red { border-color: #ebc4be; color: #8b3027; background: var(--red-pale); }
+.status-red .sync-dot { background: var(--red); }
+.sync-pill[data-action] { min-height: 36px; }
+.status-dialog p { color: var(--muted); line-height: 1.6; margin: 16px 0 24px; }
 .context-row { align-items: end; margin-top: 13px; padding: 11px 12px; border-left: 4px solid var(--orange); background: #f1f0ed; }
 .context-label { margin-bottom: 4px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .context-title { color: var(--charcoal); font-size: clamp(23px, 7.2vw, 31px); font-weight: 850; letter-spacing: -.04em; line-height: 1.08; }

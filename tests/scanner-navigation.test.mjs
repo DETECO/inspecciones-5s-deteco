@@ -81,7 +81,7 @@ test('la ruta QR restaurada desde sessionStorage valida estación y token', () =
     'la ruta guardada solo puede recuperar una estación conocida');
 });
 
-test('la estación aparece sin una consulta previa al servidor; iniciar realiza la reserva validada', () => {
+test('la estación aparece de inmediato y consulta disponibilidad sin reservar; iniciar realiza la reserva validada', () => {
   const initializer = appSource.match(/async function initializeApp\(\) \{[\s\S]*?\n\}/)?.[0] || '';
   const start = appSource.match(/async function start\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 
@@ -90,6 +90,8 @@ test('la estación aparece sin una consulta previa al servidor; iniciar realiza 
     'el nuevo flujo no retoma borradores');
   assert.doesNotMatch(initializer, /readState\(\)/,
     'no debe esperar una consulta de estado para mostrar la estación');
+  assert.match(initializer,/await validateStationAccess\(\)/,
+    'la consulta de solo lectura confirma el semáforo después del primer render');
   assert.match(start, /sendNow\('begin-final'/,
     'el servidor debe validar el QR y reservar en el mismo paso al iniciar');
   assert.match(start, /qrValidationPending\s*=\s*true/,

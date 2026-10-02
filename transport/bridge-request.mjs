@@ -1,6 +1,7 @@
 const operations = new Set([
   'state', 'reserve', 'request-takeover', 'acknowledge-takeover',
   'save-answer', 'save-finding', 'discard-extra-findings', 'review-kaizen', 'close', 'release',
+  'begin-final', 'final-state', 'upload-final-photo', 'submit-final',
 ]);
 const idPattern = /^[A-Za-z0-9_-]{16,160}$/;
 

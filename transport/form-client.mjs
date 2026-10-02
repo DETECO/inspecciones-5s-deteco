@@ -1,4 +1,4 @@
-import { makeBridgeRequest } from './bridge-request.mjs';
+import { makeBridgeRequest } from './bridge-request.mjs?v=20261002-status';
 import { decodeBridgeResult, isTrustedBridgeReceipt } from './form-bridge.mjs';
 
 const endpointPattern = /^https:\/\/script\.google\.com\/(?:a\/[A-Za-z0-9.-]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec$/;

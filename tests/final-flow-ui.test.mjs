@@ -11,6 +11,7 @@ import { createBridgeSession } from '../client/bridge-session.mjs';
 import { mergeServerState } from '../client/state-merge.mjs';
 import { submitFinalInspection } from '../client/final-submit.mjs';
 import * as dailyManagement from '../domain/daily-management.mjs';
+import { inspectionStatus } from '../client/inspection-status.mjs';
 
 function harness(send = async () => { throw new Error('No debe enviar'); }) {
   const listeners = {};
@@ -20,7 +21,7 @@ function harness(send = async () => { throw new Error('No debe enviar'); }) {
   const storage = { getItem: () => 'phone-a', setItem() {} };
   class WorkDate extends Date { constructor(...args) { super(...(args.length ? args : ['2026-09-30T15:00:00Z'])); } }
   const context = vm.createContext({
-    ...catalog, ...calendar, ...inspection, ...dailyManagement, validateInspection, validateKaizenReviews, createBridgeSession, mergeServerState, submitFinalInspection,
+    ...catalog, ...calendar, ...inspection, ...dailyManagement, inspectionStatus, validateInspection, validateKaizenReviews, createBridgeSession, mergeServerState, submitFinalInspection,
     readImageForUpload: async () => 'data:image/jpeg;base64,AAAA', resolveAppConfig: () => ({ mode: 'bridge', bridgeEndpoint: 'test' }),
     createIndexedDraftStore: () => draft, createFormBridge: () => ({ send }),
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'test-session-12345678' }, navigator: { onLine: true }, Date: WorkDate,
@@ -86,6 +87,15 @@ test('sin internet no marca cierre exitoso ni pierde respuestas', async () => {
   assert.equal(app.state.inspection.status, 'open');
   assert.match(app.state.error, /internet/);
   assert.equal(app.state.completedAt, '2026-09-30T15:00:00.000Z');
+});
+
+test('el primer intento de cierre usa el reloj confirmado, no la hora incorrecta del teléfono',async()=>{
+  const app=harness(async()=>{throw new Error('timeout');});
+  app.state.serverTime=new Date('2026-09-30T14:59:00Z').getTime();
+  app.state.serverCheckedAt=new Date('2026-09-30T15:00:00Z').getTime();
+  for(const question of catalog.QUESTIONS)await app.changeAnswer(question.id,0);
+  await app.close();
+  assert.equal(app.state.completedAt,'2026-09-30T14:59:00.000Z');
 });
 
 test('una semana cerrada por otra sesión bloquea el inicio sin mostrar un cierre propio', async () => {
