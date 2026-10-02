@@ -12,16 +12,18 @@ import { mergeServerState } from '../client/state-merge.mjs';
 import { submitFinalInspection } from '../client/final-submit.mjs';
 import * as dailyManagement from '../domain/daily-management.mjs';
 import { inspectionStatus } from '../client/inspection-status.mjs';
+import { renderResultSummary } from '../client/result-summary.mjs';
 
 function harness(send = async () => { throw new Error('No debe enviar'); }) {
   const listeners = {};
   const confirmations = [];
   const appElement = { innerHTML: '', addEventListener: (event, fn) => { listeners[event] = fn; }, querySelector: () => ({ value: 'Inspector prueba' }) };
   const draft = { saves: 0, loads: 0, async save() { this.saves++; }, async load() { this.loads++; return { inspection: { status: 'open' } }; } };
-  const storage = { getItem: () => 'phone-a', setItem() {} };
+  const removed = [];
+  const storage = { getItem: () => 'phone-a', setItem() {}, removeItem: key => removed.push(key) };
   class WorkDate extends Date { constructor(...args) { super(...(args.length ? args : ['2026-09-30T15:00:00Z'])); } }
   const context = vm.createContext({
-    ...catalog, ...calendar, ...inspection, ...dailyManagement, inspectionStatus, validateInspection, validateKaizenReviews, createBridgeSession, mergeServerState, submitFinalInspection,
+    ...catalog, ...calendar, ...inspection, ...dailyManagement, inspectionStatus, renderResultSummary, validateInspection, validateKaizenReviews, createBridgeSession, mergeServerState, submitFinalInspection,
     readImageForUpload: async () => 'data:image/jpeg;base64,AAAA', resolveAppConfig: () => ({ mode: 'bridge', bridgeEndpoint: 'test' }),
     createIndexedDraftStore: () => draft, createFormBridge: () => ({ send }),
     localStorage: storage, sessionStorage: storage, crypto: { randomUUID: () => 'test-session-12345678' }, navigator: { onLine: true }, Date: WorkDate,
@@ -33,8 +35,41 @@ function harness(send = async () => { throw new Error('No debe enviar'); }) {
   const api = context.api;
   Object.assign(api.state, { route: { stationId: 'oficina', accessToken: 't'.repeat(32) }, station: { id: 'oficina', name: 'OFICINA' }, screen: 'module', qrAccessValidated: true,
     inspection: inspection.reserveInspection(inspection.createInspection({ stationId: 'oficina', week: '2026-W40' }), { clientId: 'phone-a', inspectorName: 'Inspector prueba', at: '2026-09-30T14:30:00Z' }) });
-  return { ...api, appElement, draft, listeners, navigator: context.navigator, confirmations, setConfirm: answer => { context.window.confirm = message => { confirmations.push(message); return answer; }; } };
+  return { ...api, appElement, draft, listeners, navigator: context.navigator, confirmations, removed, setConfirm: answer => { context.window.confirm = message => { confirmations.push(message); return answer; }; } };
 }
+
+test('resumen final muestra diseño aprobado sin franja fija ni avisos anteriores', () => {
+  const app = harness();
+  Object.assign(app.state.inspection, {status:'closed',finalMaterialized:true,closedBy:'Ana',closedAt:'2026-10-02T12:30:00Z',
+    result:{finalScore:4.5,moduleScores:Object.fromEntries(catalog.MODULES.map(m=>[m.id,4.5])),dailyManagement:{applicable:false},completionStatus:'cumplida'}});
+  app.state.screen='summary'; app.state.previousWeekAlert={week:'2026-W39',responsibleName:'Old',closedBy:'Old'};
+  app.render();
+  assert.match(app.appElement.innerHTML,/result-summary/);
+  assert.match(app.appElement.innerHTML,/Satisfactoria/); assert.match(app.appElement.innerHTML,/Guardada/);
+  assert.doesNotMatch(app.appElement.innerHTML,/<header class="header|progress-track|semana pasada|Cumplida\./);
+});
+
+test('volver al inicio limpia QR y sesión de cierre sin tocar datos ni salir de Google', () => {
+  const app = harness();
+  const record=app.state.inspection;
+  Object.assign(record,{status:'closed',finalMaterialized:true});
+  app.state.screen='summary'; app.state.completedAt='2026-10-02T12:30:00Z';
+  app.state.submissionState={attempted:true}; app.state.uploadCache.set('finding',{photoId:'stored'});
+  app.listeners.click({target:{closest:()=>({dataset:{action:'return-home'}})}});
+  assert.equal(app.state.screen,'qr'); assert.equal(app.state.route,null); assert.equal(app.state.inspection,null);
+  assert.deepEqual(app.removed,['deteco-5s.active-qr']); assert.equal(app.state.completedAt,'');
+  assert.equal(app.state.submissionState.attempted,undefined); assert.equal(app.state.uploadCache.size,0);
+  assert.equal(record.status,'closed'); assert.match(app.appElement.innerHTML,/Escanear QR/);
+});
+
+test('no permite regresar y descartar una inspección abierta o cierre sin confirmar', () => {
+  const app=harness();
+  app.listeners.click({target:{closest:()=>({dataset:{action:'return-home'}})}});
+  assert.equal(app.state.screen,'module'); assert.equal(app.state.inspection.status,'open');
+  app.state.screen='summary'; app.state.inspection.status='closed'; app.state.inspection.finalMaterialized=false;
+  app.listeners.click({target:{closest:()=>({dataset:{action:'return-home'}})}});
+  assert.equal(app.state.screen,'summary'); assert.equal(app.removed.length,0);
+});
 test('contestar25y cambiar módulos no envía ni escribe borradores retomables', async () => {
   const app = harness();
   for (const question of catalog.QUESTIONS) await app.changeAnswer(question.id, 0);

@@ -15,7 +15,7 @@ test('carries the industrial DETECO visual line through the inspection screens',
   assert.match(stylesheet, /\.context-row\s*\{[^}]*border-left:\s*4px solid var\(--orange\)/s);
   assert.match(stylesheet, /\.eyebrow::before\s*\{[^}]*border:\s*2px solid var\(--orange\)/s);
   assert.doesNotMatch(stylesheet, /#172033|#33485c|#4b5b6c/i);
-  for (const selector of ['.question', '.finding-area', '.kaizen', '.check', '.summary-hero']) {
+  for (const selector of ['.question', '.finding-area', '.kaizen', '.check', '.result-hero']) {
     assert.match(stylesheet, new RegExp(`${selector.replace('.', '\\.')}\\s*\\{`));
   }
 });

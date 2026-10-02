@@ -7,6 +7,7 @@ import { resolveAppConfig } from './config.mjs';
 import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
 import { createFormBridge } from '../transport/form-client.mjs?v=20261002-close';
 import { inspectionStatus } from './inspection-status.mjs?v=20261002-status';
+import { renderResultSummary } from './result-summary.mjs?v=20261002-summary';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
 import { readImageForUpload } from './image-upload.mjs';
@@ -268,6 +269,7 @@ function syncLabel() {
 }
 
 function header() {
+  if (state.screen === 'summary' && state.inspection?.result) return '';
   const status = displayedStatus();
   const logo = '<img class="brand-logo" src="./assets/deteco-wordmark.jpg" alt="DETECO — Desarrollo de tecnologías para la construcción">';
   if (state.screen === 'scanner') {
@@ -513,6 +515,26 @@ function closeScanner() {
   render();
 }
 
+function returnToHome() {
+  if (state.screen !== 'summary' || !['closed', 'expired'].includes(state.inspection?.status)) return;
+  if (appConfig.mode === 'bridge' && state.inspection.finalMaterialized !== true) return;
+  accessGeneration += 1;
+  disposeQrScanner();
+  scannerNavigationPending = false;
+  sessionStorage.removeItem(sessionKey);
+  Object.assign(state, {
+    route: null, station: null, inspection: null, bridgeSession: null,
+    week: isoWeekChile(new Date()), screen: 'qr', moduleIndex: 0, error: '',
+    previousWeekAlert: null, scanError: '', scanNotice: '',
+    qrValidationPending: false, qrAccessValidated: false, serverTime: null, serverCheckedAt: null,
+    flashAvailable: false, flashOn: false, closing: false, closeProgress: null, photoUploads: 0,
+    sessionId: crypto.randomUUID(), completedAt: '', uploadCache: new Map(), submissionState: {},
+    syncStatus: appConfig.mode === 'bridge' ? 'Conectando' : 'Borrador local',
+  });
+  render();
+  window.scrollTo?.({ top: 0, behavior: 'instant' });
+}
+
 function retryCamera() {
   disposeQrScanner();
   state.scanError = '';
@@ -702,18 +724,8 @@ function closureProgressPage() {
 }
 
 function summaryPage() {
-  const result = state.inspection.result;
-  if (!result) return identityPage();
-  const scoreGood = result.finalScore >= 4;
-  return `
-    <section class="page-enter">
-      <div class="eyebrow">Inspección cerrada</div><h1>Resumen final</h1>
-      <div class="summary-hero"><small>Nota final</small><div class="summary-score"><strong>${number(result.finalScore)}</strong><span class="${scoreGood ? '' : 'low'}">${scoreGood ? 'SATISFACTORIA' : 'BAJO 4,0'}</span></div></div>
-      ${MODULES.map(module => `<div class="score-row"><strong>${esc(module.title)}</strong><span class="${result.moduleScores[module.id] < 4 ? 'low' : ''}">${number(result.moduleScores[module.id])}</span></div>`).join('')}
-      ${result.dailyManagement ? `<div class="score-row"><strong>GERENCIAMIENTO DIARIO · Nota independiente</strong><span>${result.dailyManagement.applicable === true ? number(result.dailyManagement.score) : result.dailyManagement.applicable === false ? 'No aplica' : 'No evaluado'}</span></div>` : ''}
-      <div class="notice ${result.completionStatus === 'vencida-cerrada-incompleta' ? 'danger' : 'good'}"><span class="notice-icon">${result.completionStatus === 'vencida-cerrada-incompleta' ? '!' : '✓'}</span><span>${result.completionStatus === 'vencida-cerrada-incompleta' ? 'Cerrada incompleta al vencer la semana; nota 0 en todos los módulos.' : result.completionStatus === 'cumplida-con-atraso' ? 'Cumplida con atraso.' : 'Cumplida.'} ${state.inspection.closedBy ? `Cerrada por ${esc(state.inspection.closedBy)}.` : ''}</span></div>
-      <p class="small">${appConfig.mode === 'bridge' ? 'Registro guardado en Google Sheets y Drive.' : 'Prueba local: este resultado no se ha enviado a Google.'}</p>
-    </section>`;
+  if (!state.inspection?.result) return identityPage();
+  return renderResultSummary({ inspection: state.inspection, stationName: stationName(), mode: appConfig.mode });
 }
 
 function footer(content) {
@@ -747,7 +759,8 @@ function render() {
   const mainClass = !state.route && state.screen === 'qr' ? 'home-main' : '';
   appElement.classList?.toggle('home-shell', !state.route && state.screen === 'qr');
   appElement.classList?.toggle('inspection-shell', Boolean(state.route) && !['scanner', 'station-opening'].includes(state.screen));
-  appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${content}</main>`;
+  appElement.classList?.toggle('summary-shell', state.screen === 'summary' && Boolean(state.inspection?.result));
+  appElement.innerHTML = `${header()}<main class="${mainClass}">${state.screen === 'summary' ? '' : previousWeekNotice()}${content}</main>`;
   if (state.closing) appElement.querySelectorAll?.('input, textarea, button').forEach(control => { control.disabled = true; });
   if (preserveInspectorFocus && state.screen === 'identity') {
     const restoredInput = appElement.querySelector('#inspector-name');
@@ -998,6 +1011,7 @@ appElement.addEventListener('click', event => {
   if (action === 'close-inspection-status') { document.querySelector('#inspection-status-dialog')?.close(); return; }
   if (action === 'retry-status') { document.querySelector('#inspection-status-dialog')?.close(); validateStationAccess(); return; }
   if (state.closing) return;
+  if (action === 'return-home') returnToHome();
   if (action === 'open-scanner') openScanner();
   if (action === 'rescan-qr') openScanner();
   if (action === 'close-scanner') closeScanner();
