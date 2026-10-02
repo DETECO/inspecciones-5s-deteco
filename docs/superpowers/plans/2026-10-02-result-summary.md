@@ -23,7 +23,7 @@
 - [x] Add failing integration tests: summary has no sticky inspection header, guard return-home to closed summaries, clear active QR and reset next-inspection session.
 - [x] Integrate view in app.mjs; style faithful white layout, semantic cards, score rows, neutral GD, in-flow orange CTA; update entry cache versions.
 - [x] Run full frontend/backend suite and diff checks. Inspect three states at reference/mobile sizes plus desktop, return-home action and console errors, without real data writes.
-- [ ] Save design-qa.md with evidence, publish GitHub, verify deployment action and exact HTTP files.
+- [x] Save design-qa.md with evidence, publish GitHub, verify deployment action and exact HTTP files.
 
 ## Test/verification commands
 
@@ -44,3 +44,11 @@
 - Full suite: 250 passed, zero failures. Existing branding selector updated from the removed summary-hero to the approved result-hero.
 - Independent read-only reviewer found no Critical/Important issues and independently reproduced 250 passes.
 - Preview server is outside this repository and seeds sample results only in local responses. No fake result route or seed is published; no real inspection was submitted.
+
+## Verified publication
+
+- Code commit: `5fd80d0b69162e53a45a1d3786a63835a49b2beb`, pushed to `origin/main`.
+- GitHub Pages action `37038125792`: completed successfully for that exact commit.
+- Public URL: https://deteco.github.io/inspecciones-5s-deteco/ . Browser loaded the normal home without app console errors.
+- HTTP 200 with exact content (normalized line endings) for index.html, styles.css, app.mjs, result-summary.mjs and all nine new SVG icons.
+- Apps Script backend remains v11, unchanged by this presentation-only release. Pre-existing Core.gs modification was not staged or committed.

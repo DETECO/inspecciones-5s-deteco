@@ -54,3 +54,7 @@ Date: 2026-10-02. Scope: approved final-result screens only; persistence, schedu
 - [x] Fresh suite and independent read-only review.
 
 final result: passed
+
+## Publication verification
+
+Code commit `5fd80d0b69162e53a45a1d3786a63835a49b2beb` is on GitHub main. Pages run `37038125792` completed successfully. The public homepage loaded without app console errors; all 13 changed/new runtime files returned HTTP 200 and exact matching content. No Apps Script redeployment was needed or performed.
