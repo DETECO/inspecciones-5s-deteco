@@ -20,7 +20,7 @@
 - [x] Client: tests first for photo count progress, lost-reply reconciliation, mismatched/incomplete state rejection and cache reuse; implement in final-submit.mjs.
 - [x] UI: regression tests for progress rendering and compact layout; integrate progress state in app.mjs, preserve DETECO typography/colors, make footer flow and narrow sticky strip.
 - [x] Verify: full Node suite/build/diff plus mobile preview. Review independently. No real data tests.
-- [ ] Release: preserve remote Apps Script backup, deploy only authorized project, commit scoped source, push existing repository, check Pages and Apps Script publication.
+- [x] Release: preserve remote Apps Script backup, deploy only authorized project, commit scoped source, push existing repository, check Pages and Apps Script publication.
 
 ## Test commands
 
@@ -42,5 +42,5 @@ Backend worker owns Code.gs, FinalSubmission.gs and backend tests. Main worker o
 - Build and diff checks passed. Mobile preview 390x844: compact sticky header 73.2px; footer static; no horizontal overflow or question overlap.
 - Read-only live check: Inspecciones contained headers only; no closed record from the reported attempt was confirmed. No records were created or removed.
 - Remote source backup: ../app5s-close-backup-20261002. Existing deployment updated to version 11; Admin.html and appsscript.json unchanged.
-- GitHub Pages publication verification remains the last release check.
+- Release commit dd05e9e27edd89a856844e5f014ae69f63ae0d87 pushed to existing main. Pages run 37016054661 completed successfully; five changed public files returned HTTP 200 and matched local source byte-for-byte after newline normalization. Apps Script version 11 read back through the authorized API; all three files matched staging.
 - Actual phone-to-Google closure and real Google latency remain user acceptance checks; simulated tests do not prove that live round trip.
