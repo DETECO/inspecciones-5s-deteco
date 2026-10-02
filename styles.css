@@ -67,6 +67,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .status-red .sync-dot { background: var(--red); }
 .sync-pill[data-action] { min-height: 36px; }
 .status-dialog p { color: var(--muted); line-height: 1.6; margin: 16px 0 24px; }
+.inspection-brand { padding: 12px 18px; border-top: 5px solid var(--orange); background: var(--paper); }
+.inspection-brand .brand-logo { width: min(230px, 55vw); max-height: 48px; margin: auto; }
+.compact-header { border-top: 0; }
+.compact-header .header-inner { padding: 8px 18px; }
+.compact-context, .compact-progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.compact-context strong { display: block; font-size: 16px; line-height: 1.2; }
+.compact-context small { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.compact-progress { margin-top: 6px; }
+.compact-progress .progress-track { max-width: none; }
+.inspection-shell main { padding-bottom: 24px; }
+.inspection-shell .footer { position: static; width: 100%; margin: 24px 0 0; padding: 14px 0 max(14px, env(safe-area-inset-bottom)); transform: none; border-right: 0; border-left: 0; border-radius: 0; background: var(--paper); backdrop-filter: none; }
+.closure-progress { padding: 24px 0; }
+.closure-progress progress { display: block; width: 100%; height: 12px; margin: 24px 0; border: 0; border-radius: 8px; overflow: hidden; accent-color: var(--orange); background: var(--line); }
+.closure-progress progress::-webkit-progress-bar { background: var(--line); border-radius: 8px; }
+.closure-progress progress::-webkit-progress-value { background: var(--orange); border-radius: 8px; }
+.closure-progress progress::-moz-progress-bar { background: var(--orange); border-radius: 8px; }
+.closure-progress progress:indeterminate { background: linear-gradient(90deg, var(--line) 30%, var(--orange) 50%, var(--line) 70%); background-size: 200% 100%; animation: closure-wait 1.8s linear infinite; }
+.closure-progress progress:indeterminate::-webkit-progress-bar { background: transparent; }
+@keyframes closure-wait { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .closure-progress progress:indeterminate { animation: none; } }
 .context-row { align-items: end; margin-top: 13px; padding: 11px 12px; border-left: 4px solid var(--orange); background: #f1f0ed; }
 .context-label { margin-bottom: 4px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
 .context-title { color: var(--charcoal); font-size: clamp(23px, 7.2vw, 31px); font-weight: 850; letter-spacing: -.04em; line-height: 1.08; }

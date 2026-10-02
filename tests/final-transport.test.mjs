@@ -23,7 +23,7 @@ test('el transporte versiona su validador para renovar la caché de las operacio
   const validatorImport = transportSource.match(/import \{ makeBridgeRequest \} from ['"]([^'"]+)['"]/)[1];
   const transportUrl = new URL(appImport, 'https://example.com/client/app.mjs');
   const validatorUrl = new URL(validatorImport, transportUrl);
-  assert.equal(transportUrl.searchParams.get('v'), '20261002-status');
+  assert.equal(transportUrl.searchParams.get('v'), '20261002-close');
   assert.equal(validatorUrl.pathname, '/transport/bridge-request.mjs');
   assert.equal(validatorUrl.searchParams.get('v'), transportUrl.searchParams.get('v'));
 });

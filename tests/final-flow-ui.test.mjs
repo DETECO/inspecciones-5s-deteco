@@ -43,6 +43,31 @@ test('contestar25y cambiar módulos no envía ni escribe borradores retomables',
   assert.equal(Object.keys(app.state.inspection.answers).length, 25);
   assert.equal(app.draft.saves, 0);
 });
+
+test('cierre muestra avance de fotos y espera de Sheet en lugar de revisión inmóvil', () => {
+  const app = harness();
+  app.state.screen = 'review';
+  app.state.closing = true;
+  app.state.closeProgress = { phase: 'photos', completed: 1, total: 3, message: 'Fotos confirmadas: 1 de 3' };
+  app.render();
+  assert.match(app.appElement.innerHTML, /Fotos confirmadas: 1 de 3/);
+  assert.match(app.appElement.innerHTML, /<progress[^>]*value="1"[^>]*max="3"/);
+  assert.doesNotMatch(app.appElement.innerHTML, /Revisa los faltantes/);
+  app.state.closeProgress = { phase: 'saving', completed: 3, total: 3, message: 'Guardando en Google Sheets…' };
+  app.render();
+  assert.match(app.appElement.innerHTML, /<progress[^>]*aria-label="Guardado en el servidor"/);
+  assert.doesNotMatch(app.appElement.innerHTML.match(/<progress[^>]*>/)?.[0] || '', /value=/);
+});
+
+test('preguntas usan marca desplazable y franja compacta; navegación no tapa contenido', () => {
+  const app = harness();
+  app.render();
+  assert.match(app.appElement.innerHTML, /class="inspection-brand"/);
+  assert.match(app.appElement.innerHTML, /class="header compact-header"/);
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.inspection-shell \.footer\s*\{[^}]*position:\s*static/s);
+  assert.match(css, /\.compact-header \.header-inner\s*\{[^}]*padding:\s*8px/s);
+});
 test('la foto queda local y no inicia envío hasta cerrar', async () => {
   const app = harness();
   const question = catalog.QUESTIONS[0];
@@ -58,6 +83,7 @@ test('cierre fallido conserva25respuestas y reintento confirma snapshot completo
   const app = harness(async request => {
     calls.push(request);
     if (fail) throw new Error('timeout');
+    if (request.operation === 'final-state') return { state: app.state.inspection };
     assert.equal(request.operation, 'submit-final');
     return { state: { ...app.state.inspection, status: 'closed', finalSessionId: request.payload.sessionId, result: { finalScore: 5, moduleScores: Object.fromEntries(catalog.MODULES.map(module => [module.id, 5])), completionStatus: 'cumplida' } } };
   });
@@ -71,7 +97,8 @@ test('cierre fallido conserva25respuestas y reintento confirma snapshot completo
   await app.close();
   assert.equal(app.state.inspection.status, 'closed');
   assert.equal(app.state.screen, 'summary');
-  assert.equal(calls[0].payload.occurredAt, calls[1].payload.occurredAt);
+  const submissions = calls.filter(request => request.operation === 'submit-final');
+  assert.equal(submissions[0].payload.occurredAt, submissions[1].payload.occurredAt);
 });
 test('no retoma el borrador antiguo', async () => {
   const app = harness();

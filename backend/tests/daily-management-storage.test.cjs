@@ -21,6 +21,7 @@ function harness(applicable) {
   const closed = context.closeInspection(state, { clientId: 'phone-a', at: '2026-09-30T15:00:00Z' });
   Object.assign(context, {
     app5sUpsert_: (table, keyColumn, id, values) => rows.push({ table, id, values }),
+    app5sBatchUpsert_: (table, keyColumn, records) => records.forEach(values => rows.push({ table, id: values[keyColumn - 1], values })),
     app5sSaveState_: () => {}, app5sMaterializeKaizenReviews_: () => {}, app5sMaterializeKaizen_: () => {},
     app5sSheet_: () => ({ getLastRow: () => 1 }), app5sStationById_: () => ({ name: 'OFICINA' }),
   });

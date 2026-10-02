@@ -65,3 +65,20 @@ test('conserva el identificador estable de una operación al enviarla por iframe
     globalThis.window = originalWindow;
   }
 });
+
+test('cierre y fotos tienen espera propia y timeout identificable para comprobar resultado', async () => {
+  const originals = { document: globalThis.document, window: globalThis.window };
+  let timer, delay;
+  const nodes = [];
+  globalThis.document = { createElement: tag => ({ tag, children: [], append(...items) { this.children.push(...items); }, remove() {}, setAttribute() {}, submit() {} }), body: { append(...items) { nodes.push(...items); } } };
+  globalThis.window = { setTimeout(fn, ms) { timer = fn; delay = ms; return 1; }, clearTimeout() {}, addEventListener() {}, removeEventListener() {} };
+  try {
+    const bridge = createFormBridge({ endpoint: 'https://script.google.com/macros/s/AKfycbx1234567890/exec' });
+    for (const [operation, expected] of [['submit-final', 90000], ['upload-final-photo', 60000], ['final-state', 30000]]) {
+      const pending = bridge.send({ operation, accessToken: 't'.repeat(32), payload: {} });
+      assert.equal(delay, expected);
+      timer();
+      await assert.rejects(pending, error => error.code === 'BRIDGE_TIMEOUT');
+    }
+  } finally { Object.assign(globalThis, originals); }
+});

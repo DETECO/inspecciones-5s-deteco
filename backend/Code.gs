@@ -90,6 +90,7 @@ function app5sPublicState_(state) {
     closedAt: state.closedAt || '',
     closedBy: state.closedBy || '',
     finalSessionId: state.finalSessionId || '',
+    finalMaterialized: state.finalMaterialized === true,
     schedule: state.schedule || null,
   };
 }
@@ -899,6 +900,43 @@ function app5sUpsert_(sheetName, keyColumn, key, values) {
   sheet.appendRow(values);
 }
 
+function app5sBatchUpsert_(sheetName, keyColumn, records) {
+  if (!records.length) return;
+  const width = records[0].length;
+  const sheet = app5sSheet_(sheetName);
+  const last = sheet.getLastRow();
+  const existing = last > 1 ? sheet.getRange(2, 1, last - 1, width).getValues() : [];
+  const positions = new Map();
+  const targetKeys = new Set(records.map(row => String(row[keyColumn - 1])));
+  existing.forEach((row, index) => {
+    const key = String(row[keyColumn - 1]);
+    if (!targetKeys.has(key)) return;
+    if (positions.has(key)) throw new Error(`Identificador duplicado en ${sheetName}.`);
+    positions.set(key, index);
+  });
+  const additions = [];
+  const changes = [];
+  const incoming = new Set();
+  records.forEach(row => {
+    if (row.length !== width) throw new Error(`Columnas incompatibles en ${sheetName}.`);
+    const key = String(row[keyColumn - 1]);
+    if (incoming.has(key)) throw new Error(`Identificador repetido en ${sheetName}.`);
+    incoming.add(key);
+    const index = positions.get(key);
+    if (index === undefined) additions.push(row);
+    else if (JSON.stringify(existing[index]) !== JSON.stringify(row)) changes.push({ index, row });
+  });
+  changes.forEach(({ index, row }) => sheet.getRange(index + 2, 1, 1, width).setValues([row]));
+  if (additions.length) {
+    const required = last + additions.length - sheet.getMaxRows();
+    if (required > 0) sheet.insertRowsAfter(sheet.getMaxRows(), required);
+    for (let offset = 0; offset < additions.length; offset += 50) {
+      const batch = additions.slice(offset, offset + 50);
+      sheet.getRange(last + 1 + offset, 1, batch.length, width).setValues(batch);
+    }
+  }
+}
+
 function app5sStationOwner_(stationId) {
   const sheet = app5sSheet_('Configuracion');
   const last = sheet.getLastRow();
@@ -963,21 +1001,33 @@ function app5sMaterializeClosed_(state) {
   app5sSaveState_(state);
 }
 
+function app5sMaterializeFinal_(state) {
+  inspectionQuestions(state).forEach(question => {
+    (state.findings[question.id] || []).forEach(finding => app5sMaterializeKaizen_(state, question.id, finding));
+  });
+  app5sMaterializeKaizenReviews_(state);
+  app5sSyncProgress_(state);
+}
+
 function app5sSyncProgress_(state) {
   const inspectionId = `${state.stationId}:${state.week}`;
   const activeFindingIds = new Set();
+  const responses = [];
+  const findings = [];
   inspectionQuestions(state).forEach(question => {
     const count = state.answers[question.id];
     if (Number.isInteger(count)) {
       const responseId = `${inspectionId}:${question.id}`;
-      app5sUpsert_('Respuestas', 1, responseId, [responseId, inspectionId, state.stationId, state.week, question.id, count, 5 - count, question.moduleId]);
+      responses.push([responseId, inspectionId, state.stationId, state.week, question.id, count, 5 - count, question.moduleId]);
     }
     (state.findings[question.id] || []).forEach((finding, index) => {
       if (!finding?.id) return;
       activeFindingIds.add(finding.id);
-      app5sUpsert_('Hallazgos', 1, finding.id, [finding.id, inspectionId, state.stationId, state.week, question.id, index + 1, finding.photoId || '', finding.note || '', finding.kaizenId || '', 'Activo']);
+      findings.push([finding.id, inspectionId, state.stationId, state.week, question.id, index + 1, finding.photoId || '', finding.note || '', finding.kaizenId || '', 'Activo']);
     });
   });
+  app5sBatchUpsert_('Respuestas', 1, responses);
+  app5sBatchUpsert_('Hallazgos', 1, findings);
 
   const findingsSheet = app5sSheet_('Hallazgos');
   if (findingsSheet.getLastRow() > 1) {
@@ -1007,22 +1057,23 @@ function app5sSyncProgress_(state) {
   app5sUpsert_(station.name, 1, state.week, values);
   if (state.status === 'expired' || state.status === 'closed') {
     const inspectionId = `${state.stationId}:${state.week}`;
-    app5sUpsert_('Inspecciones', 1, inspectionId, [inspectionId, state.stationId, state.week, state.status, state.startedBy || '', state.closedBy || '', state.startedAt || '', state.closedAt || '', state.result?.finalScore ?? 0, state.result?.completionStatus || '', state.responsibleName || '']);
-    MODULES.forEach((module, index) => {
+    app5sBatchUpsert_('Inspecciones', 1, [[inspectionId, state.stationId, state.week, state.status, state.startedBy || '', state.closedBy || '', state.startedAt || '', state.closedAt || '', state.result?.finalScore ?? 0, state.result?.completionStatus || '', state.responsibleName || '']]);
+    const scores = MODULES.map((module, index) => {
       const recordId = `${inspectionId}:${module.id}`;
-      app5sUpsert_('Puntajes modulo', 1, recordId, [
+      return [
         recordId, inspectionId, state.stationId, state.week, module.title,
         moduleScores[index], state.result?.completionStatus || state.status, state.closedAt || '',
-      ]);
+      ];
     });
     const gd = state.result?.dailyManagement;
     if (gd && gd.applicable !== null) {
       const recordId = `${inspectionId}:${DAILY_MANAGEMENT.id}`;
-      app5sUpsert_('Puntajes modulo', 1, recordId, [
+      scores.push([
         recordId, inspectionId, state.stationId, state.week, DAILY_MANAGEMENT.title,
         gd.applicable ? gd.score : '', gd.applicable ? state.result.completionStatus : 'No aplica', state.closedAt || '',
       ]);
     }
+    app5sBatchUpsert_('Puntajes modulo', 1, scores);
   }
 }
 

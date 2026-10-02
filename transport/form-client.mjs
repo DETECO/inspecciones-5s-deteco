@@ -1,4 +1,4 @@
-import { makeBridgeRequest } from './bridge-request.mjs?v=20261002-status';
+import { makeBridgeRequest } from './bridge-request.mjs?v=20261002-close';
 import { decodeBridgeResult, isTrustedBridgeReceipt } from './form-bridge.mjs';
 
 const endpointPattern = /^https:\/\/script\.google\.com\/(?:a\/[A-Za-z0-9.-]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec$/;
@@ -26,9 +26,9 @@ function formField(form, name, value) {
   form.append(input);
 }
 
-export function createFormBridge({ endpoint, timeoutMs = 30000 } = {}) {
+export function createFormBridge({ endpoint, timeoutMs } = {}) {
   const action = validateBridgeEndpoint(endpoint);
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000) throw new Error('Tiempo de espera del puente inválido.');
+  if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs < 1000)) throw new Error('Tiempo de espera del puente inválido.');
 
   return {
     send({ operation, accessToken, payload, requestId: stableRequestId }) {
@@ -70,7 +70,8 @@ export function createFormBridge({ endpoint, timeoutMs = 30000 } = {}) {
             finish(reject)(error);
           }
         };
-        const timer = window.setTimeout(() => finish(reject)(new Error('No llegó confirmación de guardado. Revisa la conexión e inténtalo nuevamente.')), timeoutMs);
+        const waitMs = timeoutMs ?? (operation === 'submit-final' ? 90000 : operation === 'upload-final-photo' ? 60000 : 30000);
+        const timer = window.setTimeout(() => finish(reject)(Object.assign(new Error('No llegó confirmación del servidor. Mantén esta página abierta para comprobar el resultado.'), { code: 'BRIDGE_TIMEOUT' })), waitMs);
         window.addEventListener('message', received);
         document.body.append(frame, form);
         form.submit();

@@ -126,8 +126,7 @@ function app5sFinalFinish_(state) {
     if (typeof app5sNotifyClosedSafe_ === 'function') app5sNotifyClosedSafe_(state);
     return;
   }
-  app5sMaterializeClosed_(state);
-  app5sSyncProgress_(state);
+  app5sMaterializeFinal_(state);
   app5sRememberInspector_(state.closedBy);
   state.finalMaterialized = true;
   app5sSaveState_(state);

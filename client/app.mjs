@@ -5,12 +5,12 @@ import { validateInspection } from '../domain/scoring.mjs?v=20261001-gd';
 import { validateKaizenReviews } from '../domain/kaizen.mjs';
 import { resolveAppConfig } from './config.mjs';
 import { createBridgeSession } from './bridge-session.mjs?v=20260930-answers-photos';
-import { createFormBridge } from '../transport/form-client.mjs?v=20261002-status';
+import { createFormBridge } from '../transport/form-client.mjs?v=20261002-close';
 import { inspectionStatus } from './inspection-status.mjs?v=20261002-status';
 import QrScanner from '../vendor/qr-scanner/qr-scanner.min.js';
 import { scannedStationUrl } from './scanned-qr.mjs';
 import { readImageForUpload } from './image-upload.mjs';
-import { submitFinalInspection } from './final-submit.mjs?v=20261001-gd';
+import { submitFinalInspection } from './final-submit.mjs?v=20261002-close';
 import {
   createInspection,
   reserveInspection,
@@ -50,6 +50,8 @@ const state = {
   flashAvailable: false,
   flashOn: false,
   closing: false,
+  closeProgress: null,
+  submissionState: {},
   photoUploads: 0,
   sessionId: crypto.randomUUID(),
   completedAt: '',
@@ -283,6 +285,9 @@ function header() {
   }
   const title = state.route ? stationName() : 'INSPECCIÓN 5S';
   const text = state.inspection?.status === 'closed' || state.inspection?.status === 'expired' ? 'Inspección cerrada' : state.route ? `${answeredCount()} de ${activeQuestions().length} respuestas` : 'Acceso por QR';
+  if (state.route && !['identity', 'summary'].includes(state.screen)) {
+    return `<div class="inspection-brand">${logo}</div><header class="header compact-header"><div class="header-inner"><div class="compact-context"><div><strong>${esc(title)}</strong><small>${esc(state.week.key.replace('-W', ' · S'))}</small></div><button type="button" class="sync-pill status-${status.tone}" data-action="show-inspection-status" aria-haspopup="dialog" aria-controls="inspection-status-dialog" aria-label="Estado: ${esc(status.label)}. Ver detalle"><i class="sync-dot" aria-hidden="true"></i>${esc(status.label)}</button></div><div class="compact-progress"><span class="state-copy">${esc(text)}</span><div class="progress-track" aria-label="Avance ${percent()}%"><div class="progress-fill" style="width:${percent()}%"></div></div></div></div></header>${inspectionStatusDialog(status)}`;
+  }
   const adminButton = !state.route && appConfig.mode === 'bridge'
     ? '<a class="admin-link admin-settings-link" href="./admin-login.html" aria-label="Administración" title="Panel de administración"><img src="./assets/icons/settings.svg" alt=""></a>'
     : '';
@@ -669,6 +674,7 @@ function chooseDailyManagement(applicable) {
 }
 
 function reviewPage() {
+  if (state.closing) return closureProgressPage();
   const inspection = validateInspection(state.inspection.answers, state.inspection.findings, activeQuestions());
   const kaizen = validateKaizenReviews(state.inspection.pendingKaizen, state.inspection.kaizenReviews);
   const checks = [
@@ -680,13 +686,19 @@ function reviewPage() {
   const ready = inspection.canClose && kaizen.canContinue && typeof state.inspection.dailyManagementApplicable === 'boolean';
   return `
     <section class="page-enter">
-      <div class="eyebrow">Cierre de inspección</div><h1>Revisa los faltantes</h1><p class="lead">Al cerrar, el QR de ${esc(stationName())} quedará bloqueado para esta semana.</p>
+      <div class="eyebrow">Cierre de inspección</div><h1>${ready ? 'Lista para cerrar' : 'Revisa los faltantes'}</h1><p class="lead">Al cerrar, el QR de ${esc(stationName())} quedará bloqueado para esta semana.</p>
       ${checks.map(([label, complete]) => `<div class="check"><span class="check-mark ${complete ? 'done' : ''}">${complete ? '✓' : ''}</span><span>${label}</span></div>`).join('')}
       <button class="secondary" data-action="change-daily-management">Cambiar si corresponde Gerenciamiento Diario</button>
-      ${!ready ? `<div class="notice"><span class="notice-icon">!</span><span>Completa los elementos pendientes antes de cerrar. No se mostrará una nota parcial.</span></div>` : `<div class="notice good"><span class="notice-icon">✓</span><span>La inspección está completa y puede cerrarse.</span></div>`}${errorNotice()}
+      ${!ready ? `<div class="notice"><span class="notice-icon">!</span><span>Completa los elementos pendientes antes de cerrar. No se mostrará una nota parcial.</span></div>` : ''}${errorNotice()}
     </section>
       ${state.photoUploads ? '<p class="hint" role="status">Preparando fotografía en el teléfono…</p>' : ''}
     ${footer(`<div class="button-row"><button class="secondary" data-action="back-to-module" ${state.closing ? 'disabled' : ''}>Volver a preguntas</button><button class="primary" data-action="close" ${ready && !state.closing && !state.photoUploads ? '' : 'disabled'}>${state.closing ? 'Guardando y cerrando…' : 'Cerrar inspección'}</button></div>`)}`;
+}
+
+function closureProgressPage() {
+  const progress = state.closeProgress || { phase: 'saving', completed: 0, total: 0, message: 'Preparando cierre…' };
+  const uploading = progress.phase === 'photos' && progress.total > 0;
+  return `<section class="closure-progress page-enter" aria-live="polite" aria-busy="true"><div class="eyebrow">Cierre de inspección</div><h1>Guardando ${esc(stationName())}</h1><p class="lead">${esc(progress.message)}</p><progress ${uploading ? `value="${progress.completed}" max="${progress.total}" aria-label="Fotografías confirmadas"` : 'aria-label="Guardado en el servidor"'}></progress><p class="small">${progress.total ? `${progress.completed} de ${progress.total} fotografías confirmadas. ` : ''}Mantén esta página abierta. El resumen aparecerá cuando el guardado esté confirmado.</p></section>`;
 }
 
 function summaryPage() {
@@ -734,6 +746,7 @@ function render() {
   else content = qrPage();
   const mainClass = !state.route && state.screen === 'qr' ? 'home-main' : '';
   appElement.classList?.toggle('home-shell', !state.route && state.screen === 'qr');
+  appElement.classList?.toggle('inspection-shell', Boolean(state.route) && !['scanner', 'station-opening'].includes(state.screen));
   appElement.innerHTML = `${header()}<main class="${mainClass}">${previousWeekNotice()}${content}</main>`;
   if (state.closing) appElement.querySelectorAll?.('input, textarea, button').forEach(control => { control.disabled = true; });
   if (preserveInspectorFocus && state.screen === 'identity') {
@@ -953,11 +966,13 @@ async function close(candidate = state.inspection) {
     if (!window.confirm(`¿Confirmas cerrar la inspección de ${stationName()} ${gdText}? Se enviarán las respuestas y fotos y la estación quedará cerrada esta semana.`)) return;
     state.inspection = candidate;
     state.screen = 'review';
+    state.closeProgress = { phase: 'saving', completed: 0, total: 0, message: 'Preparando cierre…' };
+    window.scrollTo?.({ top: 0, behavior: 'instant' });
     if (appConfig.mode === 'bridge') {
       state.completedAt = completedAt;
       if (!navigator.onLine) throw new Error('Necesitas internet para cerrar. Mantén esta página abierta y reintenta cuando vuelva la conexión.');
       const receipt = await submitFinalInspection({ session: ensureBridgeSession(), inspection: state.inspection, sessionId: state.sessionId, occurredAt: completedAt, uploadCache: state.uploadCache,
-        onProgress(message) { state.syncStatus = message; render(); } });
+        submissionState: state.submissionState, onProgress(message, detail) { state.syncStatus = message; state.closeProgress = { ...detail, message }; render(); } });
       state.inspection = receipt.state;
       state.syncStatus = 'Guardado confirmado';
       state.screen = 'summary';

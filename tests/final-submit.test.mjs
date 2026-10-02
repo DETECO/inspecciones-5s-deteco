@@ -37,3 +37,60 @@ test('snapshot final incluye decisión GD explícita sin nota calculada por clie
   assert.equal(sent.dailyManagementApplicable, false);
   assert.equal(sent.result, undefined);
 });
+
+test('progreso cuenta solo fotos confirmadas y termina con confirmación, no porcentaje ficticio', async () => {
+  const progress = [];
+  const inspection = data();
+  await submitFinalInspection({ session: { async sendNow(operation, payload) {
+    if (operation === 'upload-final-photo') return { photoId: payload.photoId };
+    return { state: { status: 'closed', finalSessionId: payload.sessionId, finalMaterialized: true } };
+  } }, inspection, sessionId: 'session-12345678', uploadCache: new Map(), onProgress: (message, detail) => progress.push({ message, detail }) });
+  assert.ok(progress.some(p => p.detail?.phase === 'photos' && p.detail.completed === 0 && p.detail.total === 2));
+  assert.ok(progress.some(p => p.detail?.phase === 'photos' && p.detail.completed === 1));
+  assert.ok(progress.some(p => p.detail?.phase === 'saving' && p.detail.completed === 2));
+  assert.equal(progress.at(-1).detail.phase, 'confirmed');
+});
+
+test('acuse perdido se comprueba con lectura y recupera cierre materializado de la misma sesión', async () => {
+  const calls = [];
+  const progress = [];
+  const state = { status: 'closed', stationId: 'oficina', week: '2026-W40', finalSessionId: 'session-12345678', finalMaterialized: true };
+  const result = await submitFinalInspection({ session: { async sendNow(operation) {
+    calls.push(operation);
+    if (operation === 'submit-final') throw Object.assign(new Error('timeout'), { code: 'BRIDGE_TIMEOUT' });
+    return { state };
+  } }, inspection: { stationId: 'oficina', week: '2026-W40', answers: {}, findings: {}, kaizenReviews: {} }, sessionId: state.finalSessionId, uploadCache: new Map(), onProgress: (_, detail) => progress.push(detail) });
+  assert.equal(result.state, state);
+  assert.deepEqual(calls, ['submit-final', 'final-state']);
+  assert.ok(progress.some(p => p?.phase === 'checking'));
+});
+
+test('recuperación rechaza cerrado incompleto, otra sesión, otra estación o semana', async () => {
+  for (const change of [{ finalMaterialized: false }, { finalSessionId: 'other-session-12345' }, { stationId: 'bodega' }, { week: '2026-W41' }]) {
+    const calls = [];
+    const state = { status: 'closed', stationId: 'oficina', week: '2026-W40', finalSessionId: 'session-12345678', finalMaterialized: true, ...change };
+    await assert.rejects(submitFinalInspection({ session: { async sendNow(operation) {
+      calls.push(operation);
+      if (operation === 'submit-final') throw Object.assign(new Error('timeout'), { code: 'BRIDGE_TIMEOUT' });
+      return { state };
+    } }, inspection: { stationId: 'oficina', week: '2026-W40', answers: {}, findings: {}, kaizenReviews: {} }, sessionId: 'session-12345678', uploadCache: new Map() }), /confirm|complet|otra/);
+    assert.deepEqual(calls, ['submit-final', 'final-state']);
+  }
+});
+
+test('reintento consulta antes de reenviar y no duplica un cierre confirmado tardíamente', async () => {
+  const submissionState = {};
+  const calls = [];
+  let completed = false;
+  const inspection = { stationId: 'oficina', week: '2026-W40', answers: {}, findings: {}, kaizenReviews: {} };
+  const args = { session: { async sendNow(operation) {
+    calls.push(operation);
+    if (operation === 'submit-final') throw Object.assign(new Error('timeout'), { code: 'BRIDGE_TIMEOUT' });
+    return { state: completed ? { ...inspection, status: 'closed', finalSessionId: 'session-12345678', finalMaterialized: true } : { ...inspection, status: 'open' } };
+  } }, inspection, sessionId: 'session-12345678', uploadCache: new Map(), submissionState };
+  await assert.rejects(submitFinalInspection(args), /confirm/);
+  completed = true;
+  const result = await submitFinalInspection(args);
+  assert.equal(result.state.status, 'closed');
+  assert.deepEqual(calls, ['submit-final', 'final-state', 'final-state']);
+});
